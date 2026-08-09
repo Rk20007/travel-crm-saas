@@ -1,0 +1,835 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Plus, Car, X, Loader2 } from 'lucide-react'
+import {
+  getRoomLines,
+  getStayExtraCost,
+  computeCategoryTotals,
+  createDefaultRoomLine,
+  BUDGET_TIERS,
+  budgetTierLabel,
+} from '@/modules/itinerary/studio'
+import { DURATION_PRESETS } from '@/lib/data/masterRepository'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+function formatPrice(n) {
+  if (!n || n <= 0) return 'Price on request'
+  return `₹${Number(n).toLocaleString('en-IN')}`
+}
+
+// Trip duration was already picked in the Details step (e.g. "4N/5D") — the
+// vehicle's "No. of days" should default to that instead of always starting at 1.
+function tripDaysFromForm(form) {
+  const preset = DURATION_PRESETS.find((p) => p.value === form.duration)
+  if (preset?.days) return preset.days
+  const match = String(form.customDuration || '').match(/(\d+)\s*D/i)
+  return match ? Number(match[1]) : 1
+}
+
+/** One "Night stays" card, scoped to a single budget tier when `category` is
+ * set (or to the whole trip when it's null — the pre-budget-tier behavior).
+ * Stays/hotels are matched by object reference rather than array index so
+ * add/update/remove stay correct even though this card only sees its own
+ * filtered slice of `form.nightStays`. */
+function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds, cnbCount }) {
+  const stays = (form.nightStays || []).filter((s) => (category ? s.category === category : !s.category))
+  const hotelsForTier = (form.hotels || []).filter((h) => (category ? h.category === category : !h.category))
+
+  // A property card should exist for every hotel picked in the Hotels step —
+  // add one automatically instead of making the user click "Add stay" and
+  // re-pick the same hotel from a dropdown for each one.
+  const hotelIdsKey = hotelsForTier.map((h) => h.id).join('|')
+  useEffect(() => {
+    const existingIds = new Set(stays.map((s) => s.hotelId).filter(Boolean))
+    const missing = hotelsForTier.filter((h) => h.id && !existingIds.has(h.id))
+    if (missing.length === 0) return
+    const additions = missing.map((h, idx) => {
+      const m = hotelMasters.find((hm) => hm._id === h.id)
+      const firstRoom = m?.rooms?.[0]
+      return {
+        location: h.location || m?.city || '',
+        hotelName: h.name || m?.name || '',
+        hotelId: h.id,
+        extraBedCharge: m?.extraBedCharge || 0,
+        cnbPrice: m?.cnbPrice || 0,
+        roomLines: [
+          {
+            ...createDefaultRoomLine(),
+            roomType: firstRoom?.roomType || m?.roomType || h.roomType || '',
+            pricePerNight: firstRoom?.price ?? m?.price ?? h.cost ?? 0,
+          },
+        ],
+        dayNumber: (form.nightStays?.length || 0) + idx + 1,
+        ...(category ? { category } : {}),
+      }
+    })
+    update({ nightStays: [...(form.nightStays || []), ...additions] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelIdsKey, hotelMasters.length])
+
+  const addNightStay = () => {
+    update({
+      nightStays: [
+        ...(form.nightStays || []),
+        {
+          location: '',
+          hotelName: '',
+          hotelId: '',
+          roomLines: [createDefaultRoomLine()],
+          dayNumber: (form.nightStays?.length || 0) + 1,
+          ...(category ? { category } : {}),
+        },
+      ],
+    })
+  }
+
+  const updateNightStay = (stay, patch) => {
+    update({
+      nightStays: (form.nightStays || []).map((s) =>
+        s === stay ? { ...s, roomLines: getRoomLines(s), ...patch } : s
+      ),
+    })
+  }
+
+  const removeNightStay = (stay) => {
+    update({ nightStays: (form.nightStays || []).filter((s) => s !== stay) })
+  }
+
+  const addRoomLine = (stay) => {
+    update({
+      nightStays: (form.nightStays || []).map((s) =>
+        s === stay ? { ...s, roomLines: [...getRoomLines(s), createDefaultRoomLine()] } : s
+      ),
+    })
+  }
+
+  const updateRoomLine = (stay, lineIndex, patch) => {
+    update({
+      nightStays: (form.nightStays || []).map((s) => {
+        if (s !== stay) return s
+        const lines = getRoomLines(s).map((l, li) => (li === lineIndex ? { ...l, ...patch } : l))
+        return { ...s, roomLines: lines }
+      }),
+    })
+  }
+
+  const removeRoomLine = (stay, lineIndex) => {
+    update({
+      nightStays: (form.nightStays || []).map((s) =>
+        s === stay ? { ...s, roomLines: getRoomLines(s).filter((_, li) => li !== lineIndex) } : s
+      ),
+    })
+  }
+
+  return (
+    <Card className="overflow-hidden border-border/60 shadow-sm">
+      <CardHeader className="flex flex-col gap-3 space-y-0 border-b border-border/60 bg-linear-to-r from-primary/10 to-transparent sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="h-6 w-1.5 shrink-0 rounded-full bg-primary" />
+          <div>
+            <CardTitle>{label ? `${label} — Night stays` : 'Night stays'}</CardTitle>
+            <CardDescription>Pick a hotel and nights for each stop — cost is calculated automatically</CardDescription>
+          </div>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addNightStay} className="w-full gap-1 sm:w-auto">
+          <Plus className="h-4 w-4" />
+          Add stay
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {hotelsForTier.length === 0 && (
+          <p className="text-sm text-amber-600">
+            No hotels selected yet. Go back to the Hotels step and select {label ? `${label} ` : ''}hotels first.
+          </p>
+        )}
+        {stays.length === 0 && <p className="text-sm text-muted-foreground">No night stays added yet.</p>}
+        {stays.map((stay, i) => {
+          const master = hotelMasters.find((h) => h._id === stay.hotelId)
+          const roomOptions = master?.rooms?.length
+            ? master.rooms
+            : master
+              ? [{ roomType: master.roomType || 'DELUXE', price: master.price || 0 }]
+              : []
+          const roomLines = getRoomLines(stay)
+          const roomsTotal = roomLines.reduce((sum, l) => {
+            const nights = Number(l.nights) || 0
+            const rooms = Number(l.roomCount) || 1
+            return sum + nights * rooms * (Number(l.pricePerNight) || 0)
+          }, 0)
+          const stayTotal = roomsTotal + getStayExtraCost(stay, master, extraBeds, cnbCount)
+          return (
+            <div key={i} className="overflow-hidden rounded-xl border border-border/60 shadow-sm">
+              <div className="bg-linear-to-r from-primary/10 to-transparent p-3">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                  <span className="h-3 w-1 rounded-full bg-primary" />
+                  Property
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hotel</Label>
+                    <Select
+                      value={stay.hotelId || ''}
+                      onValueChange={(id) => {
+                        const selected = hotelsForTier.find((h, idx) => (h.id || h.name || String(idx)) === id)
+                        const m = hotelMasters.find((h) => h._id === id)
+                        const firstRoom = m?.rooms?.[0]
+                        updateNightStay(stay, {
+                          hotelId: id,
+                          hotelName: selected?.name || m?.name || '',
+                          location: stay.location || selected?.location || m?.city || '',
+                          extraBedCharge: m?.extraBedCharge || 0,
+                          cnbPrice: m?.cnbPrice || 0,
+                          roomLines: [
+                            {
+                              ...createDefaultRoomLine(),
+                              roomType: firstRoom?.roomType || m?.roomType || '',
+                              pricePerNight: firstRoom?.price ?? m?.price ?? selected?.cost ?? 0,
+                            },
+                          ],
+                        })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select hotel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {hotelsForTier.length === 0 && (
+                          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                            No hotels selected. Go to the Hotels step first.
+                          </div>
+                        )}
+                        {hotelsForTier.map((h, idx) => {
+                          const key = h.id || h.name || String(idx)
+                          return (
+                            <SelectItem key={key} value={key}>
+                              {h.name}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Location</Label>
+                    <Input
+                      placeholder="e.g. Pahalgam"
+                      value={stay.location}
+                      onChange={(e) => updateNightStay(stay, { location: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t px-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                    <span className="h-3 w-1 rounded-full bg-primary" />
+                    Room types &amp; occupancy
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addRoomLine(stay)}
+                    disabled={!stay.hotelId}
+                    className="h-7 gap-1 px-2 text-xs"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add room type
+                  </Button>
+                </div>
+
+                {roomLines.map((line, li) => (
+                  <div key={li} className="relative rounded-lg border border-dashed p-2.5">
+                    {roomLines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRoomLine(stay, li)}
+                        className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <div className="grid gap-2 sm:grid-cols-4">
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label className="text-xs">Room Type</Label>
+                        <Select
+                          value={line.roomType || ''}
+                          onValueChange={(rt) => {
+                            const room = roomOptions.find((r) => r.roomType === rt)
+                            updateRoomLine(stay, li, { roomType: rt, pricePerNight: room?.price ?? line.pricePerNight })
+                          }}
+                          disabled={!stay.hotelId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select room" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roomOptions.length === 0 && (
+                              <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                                No room types saved for this hotel.
+                              </div>
+                            )}
+                            {roomOptions.map((r, idx) => (
+                              <SelectItem key={idx} value={r.roomType || `room-${idx}`}>
+                                {r.roomType || 'Room'} {r.price ? `· ${formatPrice(r.price)}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">No. of Rooms</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="0"
+                          value={line.roomCount ?? ''}
+                          onChange={(e) =>
+                            updateRoomLine(stay, li, {
+                              roomCount: e.target.value === '' ? '' : Number(e.target.value) || 1,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nights</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="0"
+                          value={line.nights ?? ''}
+                          onChange={(e) =>
+                            updateRoomLine(stay, li, {
+                              nights: e.target.value === '' ? '' : Number(e.target.value) || 1,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-xs">
+                      <span className="text-muted-foreground">Line price: </span>
+                      <span className="font-semibold text-primary">
+                        {(() => {
+                          const nights = Number(line.nights) || 0
+                          const rooms = Number(line.roomCount) || 1
+                          const lineTotal = nights * rooms * (Number(line.pricePerNight) || 0)
+                          return lineTotal ? formatPrice(lineTotal) : 'Price on request'
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-end justify-end gap-3 border-t px-3 py-2">
+                <div className="space-y-1 text-right">
+                  <Label className="text-xs">Total stay price</Label>
+                  <p className="text-lg font-bold text-primary">
+                    {stayTotal ? formatPrice(stayTotal) : 'Price on request'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t px-3 py-1.5">
+                <Button type="button" variant="ghost" size="sm" onClick={() => removeNightStay(stay)} className="text-destructive">
+                  Remove stay
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function StepCosting({ form, update }) {
+  const [vehicles, setVehicles] = useState([])
+  const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0)
+  const [selectedDays, setSelectedDays] = useState(() => tripDaysFromForm(form))
+  const [activityOptions, setActivityOptions] = useState([])
+  const [selectedActivityId, setSelectedActivityId] = useState('')
+  const [activityQty, setActivityQty] = useState(1)
+  const [percentInput, setPercentInput] = useState('')
+  const [flatInput, setFlatInput] = useState('')
+  const [hotelMasters, setHotelMasters] = useState([])
+  const [mastersLoading, setMastersLoading] = useState(true)
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    Promise.all([
+      fetch('/api/settings/vehicles', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.json())
+        .then((d) => setVehicles(d.vehicles || []))
+        .catch(() => {}),
+      fetch('/api/settings/activities', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.json())
+        .then((d) => setActivityOptions(d.activities || []))
+        .catch(() => {}),
+      fetch('/api/settings/hotels', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.json())
+        .then((d) => setHotelMasters(d.hotels || []))
+        .catch(() => {}),
+    ]).finally(() => setMastersLoading(false))
+  }, [])
+
+  const selectedVehicle = vehicles.find((v) => v._id === selectedVehicleId)
+  const selectedRoute = selectedVehicle?.routes?.[selectedRouteIndex]
+
+  // A trip can use one vehicle across several routes (or multiple vehicles),
+  // so each pick is appended to a list rather than overwriting a single field.
+  const addVehicleSelection = (type) => {
+    if (!selectedVehicle || !selectedRoute) return
+    const days = Number(selectedDays) || 1
+    const price = type === 'AC' ? selectedRoute.priceAC : selectedRoute.priceNonAC
+    update({
+      vehicles: [
+        ...(form.vehicles || []),
+        {
+          name: selectedVehicle.name,
+          fromLocation: selectedRoute.fromLocation || '',
+          toLocation: selectedRoute.toLocation || '',
+          priceAC: selectedRoute.priceAC || 0,
+          priceNonAC: selectedRoute.priceNonAC || 0,
+          selectedType: type,
+          days,
+          cost: (price || 0) * days,
+          currency: 'INR',
+        },
+      ],
+    })
+    setSelectedDays(tripDaysFromForm(form))
+  }
+
+  const removeVehicleSelection = (index) => {
+    update({ vehicles: (form.vehicles || []).filter((_, i) => i !== index) })
+  }
+
+  const adults = Number(form.numberOfAdults) || 0
+  const children = Number(form.numberOfChildren) || 0
+  const totalPax = adults + children
+  const extraBeds = Number(form.extraBeds) || 0
+  const cnbCount = Number(form.cnbCount) || 0
+
+  const nightStayTotal = (form.nightStays || []).reduce((sum, s) => {
+    const roomsTotal = getRoomLines(s).reduce((lineSum, l) => {
+      const nights = Number(l.nights) || 0
+      const perNight = (Number(l.roomCount) || 1) * (Number(l.pricePerNight) || 0)
+      return lineSum + nights * perNight
+    }, 0)
+    const m = hotelMasters.find((h) => h._id === s.hotelId)
+    return sum + roomsTotal + getStayExtraCost(s, m, extraBeds, cnbCount)
+  }, 0)
+  const vehicleTotal = (form.vehicles || []).reduce((sum, v) => sum + (Number(v.cost) || 0), 0)
+  const activityTotal = (form.activities || []).reduce((sum, a) => sum + (Number(a.cost) || 0), 0)
+  const baseTotal = nightStayTotal + vehicleTotal + activityTotal
+  const extraChargesTotal = (form.extraCharges || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const calculated = baseTotal + extraChargesTotal
+  const categoryTotals = computeCategoryTotals(form)
+
+  const setField = (key, value) => update({ [key]: value })
+
+  const selectedActivity = activityOptions.find((a) => a._id === selectedActivityId)
+
+  const addActivity = () => {
+    if (!selectedActivity) return
+    const qty = Number(activityQty) || 1
+    const inclusions = form.inclusions || []
+    update({
+      activities: [
+        ...(form.activities || []),
+        {
+          activityId: selectedActivity._id,
+          name: selectedActivity.name,
+          price: selectedActivity.price || 0,
+          currency: selectedActivity.priceCurrency || 'INR',
+          quantity: qty,
+          cost: (selectedActivity.price || 0) * qty,
+        },
+      ],
+      inclusions: inclusions.includes(selectedActivity.name) ? inclusions : [...inclusions, selectedActivity.name],
+    })
+    setActivityQty(1)
+  }
+
+  const removeActivity = (index) => {
+    update({ activities: (form.activities || []).filter((_, i) => i !== index) })
+  }
+
+  const addPercentCharge = () => {
+    const percent = Number(percentInput)
+    if (!percent) return
+    const amount = (baseTotal * percent) / 100
+    update({
+      extraCharges: [
+        ...(form.extraCharges || []),
+        { label: `${percent}% charge`, type: 'percent', percent, amount },
+      ],
+    })
+    setPercentInput('')
+  }
+
+  const addFlatCharge = () => {
+    const amount = Number(flatInput)
+    if (!amount) return
+    update({
+      extraCharges: [...(form.extraCharges || []), { label: 'Extra charge', type: 'flat', amount }],
+    })
+    setFlatInput('')
+  }
+
+  const removeExtraCharge = (index) => {
+    update({ extraCharges: (form.extraCharges || []).filter((_, i) => i !== index) })
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-border/60 shadow-sm">
+        <CardHeader className="border-b border-border/60 bg-linear-to-r from-primary/10 to-transparent">
+          <div className="flex items-center gap-2.5">
+            <span className="h-6 w-1.5 rounded-full bg-primary" />
+            <CardTitle>Package costing</CardTitle>
+          </div>
+          <CardDescription>Traveler counts and vehicle — pricing is auto-calculated from selected hotels and vehicle</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Adults" type="number" value={form.numberOfAdults} onChange={(v) => setField('numberOfAdults', v)} />
+            <Field label="Children" type="number" value={form.numberOfChildren} onChange={(v) => setField('numberOfChildren', v)} />
+            <div className="space-y-2">
+              <Label>Total travelers</Label>
+              <Input value={totalPax} readOnly className="bg-muted" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Extra Bed" type="number" value={form.extraBeds} onChange={(v) => setField('extraBeds', v)} />
+            <Field label="CNB" type="number" value={form.cnbCount} onChange={(v) => setField('cnbCount', v)} />
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Vehicle</Label>
+            <Select
+              value={selectedVehicleId}
+              onValueChange={(id) => {
+                setSelectedVehicleId(id)
+                setSelectedRouteIndex(0)
+              }}
+            >
+              <SelectTrigger disabled={mastersLoading}>
+                <div className="flex items-center gap-2">
+                  {mastersLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Car className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <SelectValue placeholder={mastersLoading ? 'Loading vehicles…' : 'Select vehicle'} />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {!mastersLoading && vehicles.length === 0 && (
+                  <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                    No vehicles saved. Add them under Settings → Vehicle Management.
+                  </div>
+                )}
+                {vehicles.map((v) => (
+                  <SelectItem key={v._id} value={v._id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedVehicle && selectedVehicle.routes?.length > 1 && (
+              <Select
+                value={String(selectedRouteIndex)}
+                onValueChange={(v) => setSelectedRouteIndex(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select route" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedVehicle.routes.map((r, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {[r.fromLocation, r.toLocation].filter(Boolean).join(' → ') || `Route ${i + 1}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {selectedVehicle && selectedRoute && (
+              <div className="space-y-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-2.5 pt-2">
+                <div className="flex items-center gap-2">
+                  <Label className="whitespace-nowrap text-xs">No. of days</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={selectedDays}
+                    onChange={(e) => setSelectedDays(Number(e.target.value) || 1)}
+                    className="h-8 w-20"
+                  />
+                </div>
+                <p className="text-xs font-medium text-primary">
+                  Click a fare below to add this vehicle for {selectedDays} day{Number(selectedDays) > 1 ? 's' : ''}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                {(selectedRoute.priceAC > 0 || selectedRoute.priceNonAC > 0
+                  ? ['AC', 'Non-AC'].filter(
+                      (type) => (type === 'AC' ? selectedRoute.priceAC : selectedRoute.priceNonAC) > 0
+                    )
+                  : ['']
+                ).map((type) => {
+                    const price = type === 'AC' ? selectedRoute.priceAC : selectedRoute.priceNonAC
+                    const total = (price || 0) * (Number(selectedDays) || 1)
+                    return (
+                      <button
+                        key={type || 'plain'}
+                        type="button"
+                        onClick={() => addVehicleSelection(type)}
+                        className="rounded-full border border-primary bg-background px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <Plus className="mr-1 inline h-3 w-3" />
+                        {type ? `${type} · ${formatPrice(total)}` : `Add vehicle · ${formatPrice(total)}`}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(form.vehicles || []).length === 0 ? (
+                <span className="text-xs text-muted-foreground">No vehicles added yet.</span>
+              ) : (
+                (form.vehicles || []).map((v, i) => {
+                  const routeLabel = [v.fromLocation, v.toLocation].filter(Boolean).join(' → ')
+                  return (
+                    <span
+                      key={i}
+                      className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs"
+                    >
+                      {v.name}
+                      {routeLabel ? ` (${routeLabel})` : ''}
+                      {v.selectedType ? ` - ${v.selectedType}` : ''}
+                      {v.days ? ` · ${v.days}d` : ''}
+                      {v.cost ? ` — ${formatPrice(v.cost)}` : ''}
+                      <button
+                        type="button"
+                        onClick={() => removeVehicleSelection(i)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Activities</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
+                <SelectTrigger className="w-auto min-w-55" disabled={mastersLoading}>
+                  {mastersLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  <SelectValue placeholder={mastersLoading ? 'Loading activities…' : 'Select activity'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {!mastersLoading && activityOptions.length === 0 && (
+                    <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                      No activities saved. Add them under Settings → Activities.
+                    </div>
+                  )}
+                  {activityOptions.map((a) => (
+                    <SelectItem key={a._id} value={a._id}>
+                      {a.name} {a.price ? `· ${formatPrice(a.price)}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="space-y-1">
+                <Label className="text-xs">Number of activities</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={activityQty}
+                  onChange={(e) => setActivityQty(Number(e.target.value) || 1)}
+                  className="h-9 w-20"
+                />
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={addActivity} disabled={!selectedActivity} className="gap-1">
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(form.activities || []).length === 0 ? (
+                <span className="text-xs text-muted-foreground">No activities added yet.</span>
+              ) : (
+                (form.activities || []).map((a, i) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                    {a.name}
+                    {a.quantity > 1 ? ` ×${a.quantity}` : ''}
+                    {a.cost ? ` — ${formatPrice(a.cost)}` : ''}
+                    <button
+                      type="button"
+                      onClick={() => removeActivity(i)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {form.budgetTiers ? (
+        BUDGET_TIERS.map((tier) => (
+          <NightStaysCard
+            key={tier.key}
+            category={tier.key}
+            label={tier.label}
+            form={form}
+            update={update}
+            hotelMasters={hotelMasters}
+            extraBeds={extraBeds}
+            cnbCount={cnbCount}
+          />
+        ))
+      ) : (
+        <NightStaysCard
+          category={null}
+          label={null}
+          form={form}
+          update={update}
+          hotelMasters={hotelMasters}
+          extraBeds={extraBeds}
+          cnbCount={cnbCount}
+        />
+      )}
+
+      <Card className="overflow-hidden border-border/60 shadow-sm">
+        <CardHeader className="border-b border-border/60 bg-linear-to-r from-primary/10 to-transparent">
+          <div className="flex items-center gap-2.5">
+            <span className="h-6 w-1.5 rounded-full bg-primary" />
+            <CardTitle>Extra charges</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  placeholder="e.g. 15"
+                  value={percentInput}
+                  onChange={(e) => setPercentInput(e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+                <Button type="button" size="sm" variant="outline" onClick={addPercentCharge}>
+                  Add %
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  placeholder="e.g. 2000"
+                  value={flatInput}
+                  onChange={(e) => setFlatInput(e.target.value)}
+                />
+                <Button type="button" size="sm" variant="outline" onClick={addFlatCharge}>
+                  Add amount
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(form.extraCharges || []).length === 0 ? (
+                <span className="text-xs text-muted-foreground">No extra charges added yet.</span>
+              ) : (
+                (form.extraCharges || []).map((e, i) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                    {e.type === 'percent' ? `${e.percent}%` : e.label}
+                    {` — ${formatPrice(e.amount)}`}
+                    <button
+                      type="button"
+                      onClick={() => removeExtraCharge(i)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          {categoryTotals.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {categoryTotals.map(({ category, total }) => (
+                <div key={category} className="rounded-xl border bg-primary/5 px-5 py-4">
+                  <p className="text-sm text-muted-foreground">{budgetTierLabel(category)} package total</p>
+                  <p className="text-2xl font-bold text-primary">{formatPrice(total)}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-primary/5 px-5 py-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">Total package cost</p>
+                {form.totalPriceOverride !== null && form.totalPriceOverride !== undefined && form.totalPriceOverride !== '' && (
+                  <button
+                    type="button"
+                    onClick={() => update({ totalPriceOverride: null })}
+                    className="text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    Reset to auto ({formatPrice(calculated)})
+                  </button>
+                )}
+              </div>
+              <Input
+                type="number"
+                value={form.totalPriceOverride ?? calculated}
+                onChange={(e) => update({ totalPriceOverride: e.target.value === '' ? '' : Number(e.target.value) })}
+                className="mt-1 h-auto border-none bg-transparent px-0 text-2xl font-bold text-primary shadow-none focus-visible:ring-0"
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input
+        type={type}
+        placeholder={placeholder}
+        value={value ?? ''}
+        onChange={(e) => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
+      />
+    </div>
+  )
+}

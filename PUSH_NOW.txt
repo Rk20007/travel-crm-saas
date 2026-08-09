@@ -1,0 +1,71 @@
+╔════════════════════════════════════════════════════════════════╗
+║         PUSH YOUR PROJECT TO GITHUB - STEP BY STEP             ║
+╚════════════════════════════════════════════════════════════════╝
+
+📍 YOUR GITHUB: https://github.com/Rk20007
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: CREATE REPOSITORY ON GITHUB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Open: https://github.com/new
+2. Enter Repository name: travel-crm-saas
+3. Description: Travel CRM SaaS - Production Ready
+4. Choose: Public (or Private)
+5. Click: Create Repository
+
+You'll see a page with commands. Look for the HTTPS URL:
+https://github.com/Rk20007/travel-crm-saas.git
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 2: RUN THESE COMMANDS IN TERMINAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cd /vercel/share/v0-project
+
+git add .
+
+git commit -m "Initial commit: Travel CRM SaaS"
+
+git branch -M main
+
+git remote add origin https://github.com/Rk20007/travel-crm-saas.git
+
+git push -u origin main
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 3: ENTER GITHUB CREDENTIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GitHub will ask for username/password or token:
+
+Username: Rk20007
+Password: Use Personal Access Token
+  → Go to: https://github.com/settings/tokens
+  → Click: Generate new token
+  → Check: repo scope
+  → Copy token and paste as password
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 4: VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After push completes, visit:
+https://github.com/Rk20007/travel-crm-saas
+
+You should see all your files there!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ DONE! Your project is on GitHub!
+
+For future commits, just use:
+  git add .
+  git commit -m "Your message"
+  git push
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

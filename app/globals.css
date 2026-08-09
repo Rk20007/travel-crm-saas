@@ -1,0 +1,370 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Premium dark-purple theme */
+  --background: #0b0b10;
+  --foreground: #f5f6fb;
+  --card: #151420;
+  --card-foreground: #f5f6fb;
+  --popover: #151420;
+  --popover-foreground: #f5f6fb;
+
+  /* Primary: purple brand accent */
+  --primary: #8a2be1;
+  --primary-foreground: #f5f6fb;
+
+  /* Secondary: dark surface */
+  --secondary: #1f1e2e;
+  --secondary-foreground: #f5f6fb;
+
+  /* Muted */
+  --muted: #1f1e2e;
+  --muted-foreground: #808097;
+
+  /* Accent: same dark surface, used for hover / highlights */
+  --accent: #1f1e2e;
+  --accent-foreground: #f5f6fb;
+
+  /* Semantic status colors (badges/toasts) */
+  --success: #568203;
+  --success-foreground: #f5f6fb;
+  --warning: #f59e0b;
+  --warning-foreground: #1a1300;
+  --info: #3b82f6;
+  --info-foreground: #f5f6fb;
+
+  --destructive: #f59e0b;
+  --destructive-foreground: #1a1300;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #8a2be1;
+
+  /* Secondary accent — neon lime, used sparingly as a pop against the
+     purple primary (a 2nd chart series, standout badges/tags). */
+  --accent-secondary: #b6ff3b;
+  --accent-secondary-foreground: #0b0b10;
+
+  /* Chart colors — purple family, with the lime accent as the 2nd series */
+  --chart-1: #8a2be1;
+  --chart-2: #b6ff3b;
+  --chart-3: #6d28d9;
+  --chart-4: #c084fc;
+  --chart-5: #4c1d95;
+
+  --radius: 1rem;
+
+  /* Sidebar */
+  --sidebar: #111118;
+  --sidebar-foreground: #f5f6fb;
+  --sidebar-primary: #8a2be1;
+  --sidebar-primary-foreground: #f5f6fb;
+  --sidebar-accent: #1f1e2e;
+  --sidebar-accent-foreground: #f5f6fb;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #8a2be1;
+}
+
+.dark {
+  --background: #0b0b10;
+  --foreground: #f5f6fb;
+  --card: #151420;
+  --card-foreground: #f5f6fb;
+  --popover: #151420;
+  --popover-foreground: #f5f6fb;
+
+  --primary: #8a2be1;
+  --primary-foreground: #f5f6fb;
+
+  --secondary: #1f1e2e;
+  --secondary-foreground: #f5f6fb;
+
+  --muted: #1f1e2e;
+  --muted-foreground: #808097;
+
+  --accent: #1f1e2e;
+  --accent-foreground: #f5f6fb;
+
+  --success: #568203;
+  --success-foreground: #f5f6fb;
+  --warning: #f59e0b;
+  --warning-foreground: #1a1300;
+  --info: #3b82f6;
+  --info-foreground: #f5f6fb;
+
+  --destructive: #f59e0b;
+  --destructive-foreground: #1a1300;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #8a2be1;
+
+  --chart-1: #8a2be1;
+  --chart-2: #a855f7;
+  --chart-3: #6d28d9;
+  --chart-4: #c084fc;
+  --chart-5: #4c1d95;
+
+  --sidebar: #111118;
+  --sidebar-foreground: #f5f6fb;
+  --sidebar-primary: #8a2be1;
+  --sidebar-primary-foreground: #f5f6fb;
+  --sidebar-accent: #1f1e2e;
+  --sidebar-accent-foreground: #f5f6fb;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #8a2be1;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-secondary-foreground: var(--accent-secondary-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Number inputs are for typing values, not stepping through them —
+     drop the browser's built-in up/down spinner across the app. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Brand gradient text */
+  .text-gradient {
+    background-image: linear-gradient(90deg, #12101c 0%, #3b1769 55%, #8a2be1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Subtle grid backdrop for hero sections */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Soft radial glow */
+  .glow-primary {
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--primary) 22%, transparent), transparent);
+  }
+
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px -12px color-mix(in oklab, var(--primary) 30%, transparent);
+    border-color: color-mix(in oklab, var(--primary) 35%, transparent);
+  }
+
+  /* Thin scrollbar that's invisible until the sidebar is hovered — Tailwind
+     has no core utility for ::-webkit-scrollbar, so this is plain CSS scoped
+     to one class rather than a plugin. */
+  .sidebar-nav-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar {
+    width: 0px;
+    transition: width 0.2s ease;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+  }
+  .sidebar-nav-scroll:hover {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  }
+  .sidebar-nav-scroll:hover::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-nav-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  .sidebar-nav-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.45);
+  }
+
+  /* Same hover-reveal thin scrollbar, but for light-background panels (uses
+     the theme foreground color instead of white). */
+  .scroll-hover-thin {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-hover-thin::-webkit-scrollbar {
+    width: 0px;
+    transition: width 0.2s ease;
+  }
+  .scroll-hover-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-hover-thin::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+  }
+  .scroll-hover-thin:hover {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent) transparent;
+  }
+  .scroll-hover-thin:hover::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scroll-hover-thin:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 25%, transparent);
+  }
+  .scroll-hover-thin:hover::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+
+  /* Premium neon accent — a soft purple glow on the interactive elements
+     that matter (primary buttons, the active sidebar item, focused inputs,
+     chart lines), left off everything else so it reads as a luxury detail
+     rather than a gaming UI. Targeted via data-slot/class selectors so no
+     component file needs touching to pick it up. */
+  [data-slot='button'].bg-primary {
+    box-shadow:
+      0 0 8px rgba(138, 43, 225, 0.35),
+      0 0 18px rgba(138, 43, 225, 0.25),
+      0 0 32px rgba(138, 43, 225, 0.15);
+    transition:
+      box-shadow 180ms ease-out,
+      transform 180ms ease-out,
+      background-color 180ms ease-out;
+  }
+  [data-slot='button'].bg-primary:hover {
+    box-shadow:
+      0 0 10px rgba(138, 43, 225, 0.45),
+      0 0 24px rgba(177, 78, 255, 0.35),
+      0 0 42px rgba(138, 43, 225, 0.22);
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  .bg-sidebar-primary {
+    box-shadow:
+      0 0 10px rgba(138, 43, 225, 0.35),
+      0 0 22px rgba(138, 43, 225, 0.2);
+  }
+
+  /* Ambient bottom-left purple glow baked into the card surface itself
+     (not just a hover effect) — layered radial + linear gradient so it
+     reads as premium lighting rather than a flat fill. */
+  [data-slot='card'] {
+    background:
+      radial-gradient(circle at bottom left, rgba(138, 43, 225, 0.45) 0%, rgba(138, 43, 225, 0.18) 18%, transparent 55%),
+      linear-gradient(180deg, #232136 0%, #1f1e2e 100%);
+    border-radius: 18px;
+    border-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    transition:
+      box-shadow 180ms ease-out,
+      transform 180ms ease-out;
+  }
+  [data-slot='card']:hover {
+    box-shadow:
+      0 8px 30px rgba(0, 0, 0, 0.35),
+      0 0 40px rgba(138, 43, 225, 0.25);
+    transform: translateY(-2px);
+  }
+
+  [data-slot='input']:focus-visible,
+  [data-slot='select-trigger']:focus-visible,
+  [data-slot='textarea']:focus-visible {
+    box-shadow: 0 0 0 3px rgba(138, 43, 225, 0.18);
+  }
+
+  /* recharts renders each Line as an SVG path with this fixed class name,
+     so the glow can be applied globally without passing custom props. */
+  .recharts-line-curve {
+    filter: drop-shadow(0 0 6px rgba(138, 43, 225, 0.35));
+  }
+}
+
+/* Mobile: every box (cards, buttons, inputs, dialogs, badges — anything
+   deriving from --radius, plus the card's own hardcoded corner) gets 30%
+   less corner rounding than desktop. */
+@media (max-width: 639px) {
+  :root {
+    --radius: 0.7rem;
+  }
+  [data-slot='card'] {
+    border-radius: 12.6px;
+  }
+}
