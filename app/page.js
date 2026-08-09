@@ -1,8 +1,20 @@
 'use client'
 
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   CheckCircle2,
   Users,
@@ -16,9 +28,147 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Loader2,
+  PartyPopper,
 } from 'lucide-react'
 
+const EMPTY_DEMO = { name: '', email: '', phone: '', address: '', preferredDate: '' }
+
+function BookDemoDialog({ open, onOpenChange }) {
+  const [form, setForm] = useState(EMPTY_DEMO)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/demo-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong. Please try again.')
+        return
+      }
+      setDone(true)
+      setForm(EMPTY_DEMO)
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) setDone(false)
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        {done ? (
+          <div className="py-6 text-center">
+            <PartyPopper className="mx-auto h-10 w-10 text-primary" />
+            <h3 className="mt-4 text-lg font-semibold">Thanks — request received!</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Our team will reach out shortly to set up your workspace and walk you through a demo.
+            </p>
+            <Button className="mt-6 w-full" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Book a demo</DialogTitle>
+              <DialogDescription>
+                Tell us a bit about your agency — our team sets up your workspace and reaches out to
+                walk you through it.
+              </DialogDescription>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={submit}>
+              {error && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+              <div>
+                <Label>Full name *</Label>
+                <Input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Phone *</Label>
+                <Input
+                  type="tel"
+                  required
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Address</Label>
+                <Textarea
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  className="min-h-[80px]"
+                />
+              </div>
+              <div>
+                <Label>Preferred date</Label>
+                <Input
+                  type="date"
+                  value={form.preferredDate}
+                  onChange={(e) => setForm({ ...form, preferredDate: e.target.value })}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Request demo
+              </Button>
+            </form>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
+  )
+}
+
+function HomeContent() {
+  const searchParams = useSearchParams()
+  const [demoOpen, setDemoOpen] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('demo') === '1') setDemoOpen(true)
+  }, [searchParams])
+
   const features = [
     {
       icon: Users,
@@ -88,11 +238,9 @@ export default function Home() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/register">
-              <Button className="gap-1.5">
-                Get Started <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button className="gap-1.5" onClick={() => setDemoOpen(true)}>
+              Book a Demo <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </nav>
@@ -115,11 +263,13 @@ export default function Home() {
             your agency needs to sell more trips and delight more travelers.
           </p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/register" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full gap-2 text-base sm:w-auto">
-                Start Free Trial <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button
+              size="lg"
+              className="w-full gap-2 text-base sm:w-auto"
+              onClick={() => setDemoOpen(true)}
+            >
+              Book a Demo <ArrowRight className="h-4 w-4" />
+            </Button>
             <a href="#features" className="w-full sm:w-auto">
               <Button variant="outline" size="lg" className="w-full text-base sm:w-auto">
                 Explore Features
@@ -217,11 +367,14 @@ export default function Home() {
             <p className="mx-auto mt-4 max-w-xl text-lg opacity-90">
               Join agencies using Travel SaaS CRM to manage leads, itineraries, and bookings — beautifully.
             </p>
-            <Link href="/register">
-              <Button variant="secondary" size="lg" className="mt-8 gap-2">
-                Get Started Today <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="mt-8 gap-2"
+              onClick={() => setDemoOpen(true)}
+            >
+              Book a Demo <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </section>
@@ -240,6 +393,8 @@ export default function Home() {
           </p>
         </div>
       </footer>
+
+      <BookDemoDialog open={demoOpen} onOpenChange={setDemoOpen} />
     </main>
   )
 }

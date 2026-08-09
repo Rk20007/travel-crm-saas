@@ -182,8 +182,8 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-primary hover:underline font-medium">
-            Create one
+          <Link href="/?demo=1" className="text-primary hover:underline font-medium">
+            Book a demo
           </Link>
         </p>
       </Card>

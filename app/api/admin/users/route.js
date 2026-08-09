@@ -1,14 +1,19 @@
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
-import Team from '@/models/Team'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import { hashPassword } from '@/lib/auth'
-import { resolveTeamLimits } from '@/lib/plans'
+import { notifyUser } from '@/lib/notify'
 import mongoose from 'mongoose'
 
+const ROLE_LABELS = {
+  agent: 'Sales Employee',
+  manager: 'Sales Lead',
+  operations: 'Operations',
+  accounts: 'Accounts',
+  admin: 'Owner',
+}
+
 const ASSIGNABLE_ROLES = ['agent', 'manager', 'operations', 'accounts', 'admin']
-/** Roles that consume a plan seat (the owner doesn't). */
-const STAFF_ROLES = ['agent', 'manager', 'operations', 'accounts']
 
 export async function GET(request) {
   try {
@@ -63,25 +68,10 @@ export async function POST(request) {
       return Response.json({ error: 'Email already registered' }, { status: 409 })
     }
 
-    // Seat limit comes from the agency's plan, plus any per-agency override the
-    // platform admin has granted. The owner seat itself doesn't consume one.
-    const team = await Team.findById(authResult.user.teamId).select('plan planOverrides').lean()
-    if (team) {
-      const limits = await resolveTeamLimits(team)
-      const seatsUsed = await User.countDocuments({
-        teamId: authResult.user.teamId,
-        role: { $in: ['agent', 'manager', 'operations', 'accounts'] },
-        isActive: true,
-      })
-      if (STAFF_ROLES.includes(role) && seatsUsed >= limits.maxAgents) {
-        return Response.json(
-          {
-            error: `Plan limit reached (${limits.maxAgents} staff seats). Upgrade your plan to add more.`,
-          },
-          { status: 403 }
-        )
-      }
-    }
+    // Owners can't self-approve staff — the account stays inactive until a
+    // super admin reviews it. Super admins creating a user directly need no
+    // approval loop.
+    const needsApproval = authResult.user.role === 'admin'
 
     const user = await User.create({
       name,
@@ -90,18 +80,45 @@ export async function POST(request) {
       role,
       teamId: authResult.user.teamId,
       leadAssignmentWeight: ['agent', 'manager'].includes(role) ? leadAssignmentWeight : 0,
-      isActive: true,
+      isActive: !needsApproval,
+      approvalStatus: needsApproval ? 'pending' : 'approved',
+      requestedBy: needsApproval ? authResult.user.userId : undefined,
     })
+
+    if (needsApproval) {
+      const [superadmins, owner] = await Promise.all([
+        User.find({ role: 'superadmin', isActive: true }).select('_id').lean(),
+        User.findById(authResult.user.userId).select('name email').lean(),
+      ])
+      const ownerName = owner?.name || owner?.email || 'An agency owner'
+      await Promise.all(
+        superadmins.map((sa) =>
+          notifyUser({
+            userId: sa._id,
+            type: 'employee_approval_requested',
+            title: 'Employee approval needed',
+            message: `${ownerName} wants to add ${name} as ${ROLE_LABELS[role] || role}.`,
+            relatedId: user._id,
+            relatedModel: 'User',
+            priority: 'high',
+            action: { text: 'Review request', link: '/dashboard/platform/users?status=pending' },
+          })
+        )
+      )
+    }
 
     return Response.json(
       {
-        message: 'Employee added',
+        message: needsApproval
+          ? 'Employee request sent to the super admin for approval. They will be added once approved.'
+          : 'Employee added',
         user: {
           id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
           leadAssignmentWeight: user.leadAssignmentWeight,
+          approvalStatus: user.approvalStatus,
         },
       },
       { status: 201 }

@@ -2,14 +2,14 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
-"scripts": {
-  "dev": "next dev --webpack",
+  "scripts": {
+    "dev": "next dev --webpack",
     "build": "next build --webpack",
-  "start": "next start",
-  "lint": "eslint .",
-  "worker:followups": "node scripts/worker-followups.js",
-  "create:superadmin": "node scripts/create-superadmin.js"
-},
+    "start": "next start",
+    "lint": "eslint .",
+    "worker:followups": "node scripts/worker-followups.js",
+    "create:superadmin": "node scripts/create-superadmin.js"
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
@@ -55,8 +55,8 @@
     "embla-carousel-react": "8.6.0",
     "google-auth-library": "^10.6.2",
     "html-to-text": "^9.0.5",
-    "ioredis": "^5.9.2",
     "input-otp": "1.4.2",
+    "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.564.0",
     "mongoose": "^9.6.0",
@@ -78,6 +78,7 @@
     "speakeasy": "^2.0.0",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
+    "web-push": "^3.6.7",
     "ws": "^8.20.0",
     "zod": "^3.24.1"
   },

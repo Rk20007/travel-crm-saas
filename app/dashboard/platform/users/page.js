@@ -237,6 +237,7 @@ export default function PlatformUsersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="pending">Pending approval</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="suspended">Suspended</SelectItem>
             </SelectContent>
@@ -312,7 +313,14 @@ export default function PlatformUsersPage() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        {u.isBlocked || !u.isActive ? (
+                        {u.approvalStatus === 'pending' ? (
+                          <div className="space-y-1">
+                            <Badge className="bg-warning text-white">Pending approval</Badge>
+                            {u.requestedBy?.name && (
+                              <p className="text-xs text-muted-foreground">by {u.requestedBy.name}</p>
+                            )}
+                          </div>
+                        ) : u.isBlocked || !u.isActive ? (
                           <Badge variant="destructive">Suspended</Badge>
                         ) : (
                           <Badge variant="secondary">Active</Badge>
@@ -322,43 +330,66 @@ export default function PlatformUsersPage() {
                         {u.lastLogin ? formatDate(u.lastLogin) : 'Never'}
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            title="Suspend / restore"
-                            onClick={() =>
-                              patchUser(u._id, { isBlocked: !u.isBlocked, isActive: !!u.isBlocked })
-                            }
-                          >
-                            {u.isBlocked ? 'Restore' : 'Suspend'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            title="Reset password"
-                            onClick={() => setResetTarget(u)}
-                          >
-                            <KeyRound className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            title="Impersonate for support"
-                            disabled={u.role === 'superadmin' || u.isBlocked || !u.teamId}
-                            onClick={() => impersonate(u)}
-                          >
-                            <UserCog className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            title="Remove"
-                            onClick={() => removeUser(u)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                        {u.approvalStatus === 'pending' ? (
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                patchUser(u._id, { approvalStatus: 'approved' }, 'Employee approved')
+                              }
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                if (!confirm(`Decline the request to add ${u.email}?`)) return
+                                patchUser(u._id, { approvalStatus: 'rejected' }, 'Request declined')
+                              }}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Suspend / restore"
+                              onClick={() =>
+                                patchUser(u._id, { isBlocked: !u.isBlocked, isActive: !!u.isBlocked })
+                              }
+                            >
+                              {u.isBlocked ? 'Restore' : 'Suspend'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Reset password"
+                              onClick={() => setResetTarget(u)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Impersonate for support"
+                              disabled={u.role === 'superadmin' || u.isBlocked || !u.teamId}
+                              onClick={() => impersonate(u)}
+                            >
+                              <UserCog className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              title="Remove"
+                              onClick={() => removeUser(u)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

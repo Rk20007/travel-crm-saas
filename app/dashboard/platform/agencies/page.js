@@ -68,6 +68,25 @@ export default function AgenciesPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState(EMPTY_AGENCY)
+  const [demoId, setDemoId] = useState(null)
+
+  // Arriving from a "Book a Demo" request pre-fills the create-agency form
+  // with what the lead already gave us instead of retyping it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ownerName = params.get('ownerName')
+    const ownerEmail = params.get('ownerEmail')
+    if (!ownerName && !ownerEmail) return
+    setDraft((prev) => ({
+      ...prev,
+      name: params.get('name') || prev.name,
+      ownerName: ownerName || prev.ownerName,
+      ownerEmail: ownerEmail || prev.ownerEmail,
+      ownerPhone: params.get('ownerPhone') || prev.ownerPhone,
+    }))
+    setDemoId(params.get('demoId'))
+    setCreateOpen(true)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,6 +118,13 @@ export default function AgenciesPage() {
     try {
       await saFetch('/api/superadmin/agencies', { method: 'POST', body: draft })
       toast.success(`Agency "${draft.name}" created`)
+      if (demoId) {
+        await saFetch(`/api/demo-requests/${demoId}`, {
+          method: 'PATCH',
+          body: { status: 'converted' },
+        }).catch(() => {})
+        setDemoId(null)
+      }
       setCreateOpen(false)
       setDraft(EMPTY_AGENCY)
       setPage(1)

@@ -28,6 +28,7 @@ import {
   Building,
   UsersRound,
   Layers,
+  PhoneCall,
 } from 'lucide-react'
 import {
   Select,
@@ -40,6 +41,7 @@ import { scheduleSilentRefresh } from '@/lib/auth-client'
 import { getNavItems, ROLE_LABELS, getDashboardRoute, canAccessLeads } from '@/lib/permissions-client'
 import { Toaster } from '@/components/ui/sonner'
 import { ImpersonationBanner } from '@/components/crm/ImpersonationBanner'
+import { NotificationBell } from '@/components/crm/NotificationBell'
 import { cn } from '@/lib/utils'
 
 export default function DashboardLayout({ children }) {
@@ -167,6 +169,7 @@ export default function DashboardLayout({ children }) {
     const items = getNavItems(user.role)
     const icons = {
       '/dashboard/platform': Globe,
+      '/dashboard/platform/demo-requests': PhoneCall,
       '/dashboard/platform/agencies': Building,
       '/dashboard/platform/users': UsersRound,
       '/dashboard/platform/plans': Layers,
@@ -400,10 +403,13 @@ export default function DashboardLayout({ children }) {
               </p>
             </div>
           </div>
-          <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
-            <span className="rounded-full border px-2 py-1">
-              Workspace: {String(user.teamId || '').slice(-6)}
-            </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <NotificationBell />
+            <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
+              <span className="rounded-full border px-2 py-1">
+                Workspace: {String(user.teamId || '').slice(-6)}
+              </span>
+            </div>
           </div>
         </header>
 

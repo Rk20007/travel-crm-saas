@@ -110,6 +110,16 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    /** Employees added by an agency owner sit here until a super admin approves them. */
+    approvalStatus: {
+      type: String,
+      enum: ['approved', 'pending', 'rejected'],
+      default: 'approved',
+    },
+    requestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
     lastLogin: {
       type: Date,
     },

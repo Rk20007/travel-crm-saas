@@ -4,6 +4,7 @@ import User from '@/models/User'
 import Team from '@/models/Team'
 import Brand from '@/models/Brand'
 import RefreshToken from '@/models/RefreshToken'
+import { notifyUser } from '@/lib/notify'
 import { hashPassword } from '@/lib/auth'
 import {
   requireSuperadmin,
@@ -45,11 +46,13 @@ export async function GET(request) {
     }
     if (status === 'active') filter.isActive = true
     else if (status === 'suspended') filter.$and = [{ $or: [{ isActive: false }, { isBlocked: true }] }]
+    else if (status === 'pending') filter.approvalStatus = 'pending'
 
     const [users, total, agencies] = await Promise.all([
       User.find(filter)
         .select(SAFE_FIELDS)
         .populate('teamId', 'name plan isActive')
+        .populate('requestedBy', 'name email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -227,6 +230,16 @@ export async function PATCH(request) {
       }
     }
 
+    let approvalNotice = null
+    if (body.approvalStatus && ['approved', 'rejected'].includes(body.approvalStatus)) {
+      if (target.approvalStatus !== 'pending') {
+        return Response.json({ error: 'This account is not awaiting approval' }, { status: 400 })
+      }
+      target.approvalStatus = body.approvalStatus
+      target.isActive = body.approvalStatus === 'approved'
+      approvalNotice = body.approvalStatus
+    }
+
     if (typeof body.isActive === 'boolean') {
       if (isSelf && !body.isActive) {
         return Response.json({ error: 'You cannot deactivate yourself' }, { status: 400 })
@@ -257,6 +270,23 @@ export async function PATCH(request) {
 
     await target.save()
 
+    if (approvalNotice && target.requestedBy) {
+      await notifyUser({
+        userId: target.requestedBy,
+        teamId: target.teamId,
+        type: approvalNotice === 'approved' ? 'employee_approved' : 'employee_rejected',
+        title: approvalNotice === 'approved' ? 'Employee approved' : 'Employee request declined',
+        message:
+          approvalNotice === 'approved'
+            ? `${target.name} (${target.email}) has been approved and can now sign in.`
+            : `The request to add ${target.name} (${target.email}) was declined by the super admin.`,
+        relatedId: target._id,
+        relatedModel: 'User',
+        priority: 'high',
+        action: { text: 'View team', link: '/dashboard/admin' },
+      })
+    }
+
     // A password reset, block or deactivation is meaningless while the old
     // refresh token can still mint access tokens.
     if (passwordReset || target.isBlocked || !target.isActive) {
@@ -284,7 +314,13 @@ export async function PATCH(request) {
     })
 
     return Response.json({
-      message: passwordReset ? 'Password reset' : 'User updated',
+      message: approvalNotice
+        ? approvalNotice === 'approved'
+          ? 'Employee approved'
+          : 'Employee request declined'
+        : passwordReset
+          ? 'Password reset'
+          : 'User updated',
       user: {
         _id: target._id,
         name: target.name,
@@ -294,6 +330,7 @@ export async function PATCH(request) {
         isActive: target.isActive,
         isBlocked: target.isBlocked,
         leadAssignmentWeight: target.leadAssignmentWeight,
+        approvalStatus: target.approvalStatus,
       },
     })
   } catch (error) {

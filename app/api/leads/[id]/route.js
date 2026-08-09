@@ -8,9 +8,11 @@ import Invoice from '@/models/Invoice'
 import Payment from '@/models/Payment'
 import Voucher from '@/models/Voucher'
 import Notification from '@/models/Notification'
+import User from '@/models/User'
 import { authenticate, requireLeadAccess } from '@/lib/middleware'
 import { canOnlyViewOwnLeads } from '@/lib/permissions'
 import { tenantFilter } from '@/lib/tenant'
+import { notifyUser } from '@/lib/notify'
 import mongoose from 'mongoose'
 
 function leadAccessQuery(authUser, id) {
@@ -88,6 +90,7 @@ export async function PUT(request, { params }) {
 
     const prevStatus = lead.status
     const statusChanged = body.status && body.status !== prevStatus
+    const prevAssignedTo = lead.assignedTo ? String(lead.assignedTo) : null
 
     // Apply allowed fields.
     const editable = [
@@ -119,6 +122,25 @@ export async function PUT(request, { params }) {
     await lead.save()
     await lead.populate('assignedTo', 'name email')
 
+    // Reassigning a lead (e.g. via the dropdown in the leads table) didn't
+    // used to notify anyone — the assignee only heard about it if they
+    // happened to refresh the page. Tell them now, in-app and via push.
+    const newAssignedTo = lead.assignedTo?._id ? String(lead.assignedTo._id) : null
+    if (newAssignedTo && newAssignedTo !== prevAssignedTo) {
+      const clientName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Lead'
+      await notifyUser({
+        userId: lead.assignedTo._id,
+        teamId: authResult.user.teamId,
+        type: 'lead_assigned',
+        title: 'Lead Assigned To You',
+        message: `${clientName}${lead.destination ? ` — ${lead.destination}` : ''}`,
+        relatedId: lead._id,
+        relatedModel: 'Lead',
+        priority: 'high',
+        action: { text: 'Open lead', link: `/dashboard/leads/${lead._id}` },
+      })
+    }
+
     // Record a timeline entry for status changes (best-effort).
     if (statusChanged) {
       try {
@@ -137,6 +159,34 @@ export async function PUT(request, { params }) {
       } catch (e) {
         console.error('Timeline write failed:', e?.message)
       }
+    }
+
+    // Booking is a revenue event — the sales employee who closed it gets a
+    // confirmation, and the owner gets told a booking landed, on every device.
+    if (statusChanged && lead.status === 'booked') {
+      const clientName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Lead'
+      const recipients = new Map()
+      if (lead.assignedTo) recipients.set(String(lead.assignedTo._id || lead.assignedTo), lead.assignedTo._id || lead.assignedTo)
+      const owners = await User.find({ teamId: authResult.user.teamId, role: 'admin', isActive: true })
+        .select('_id')
+        .lean()
+      owners.forEach((o) => recipients.set(String(o._id), o._id))
+
+      await Promise.all(
+        [...recipients.values()].map((userId) =>
+          notifyUser({
+            userId,
+            teamId: authResult.user.teamId,
+            type: 'booking_confirmed',
+            title: 'Lead Booked',
+            message: `${clientName}${lead.destination ? ` — ${lead.destination}` : ''} was marked Booked.`,
+            relatedId: lead._id,
+            relatedModel: 'Lead',
+            priority: 'high',
+            action: { text: 'Open lead', link: `/dashboard/leads/${lead._id}` },
+          })
+        )
+      )
     }
 
     return Response.json({

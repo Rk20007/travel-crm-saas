@@ -42,8 +42,21 @@ export async function POST(request) {
       )
     }
 
-    // Checked after the password so a wrong password and a suspended account
-    // are indistinguishable to someone probing for valid emails.
+    // Checked after the password so a wrong password and a suspended/pending
+    // account are indistinguishable to someone probing for valid emails.
+    if (user.approvalStatus === 'pending') {
+      return Response.json(
+        { error: 'Your account is awaiting super admin approval. You will be able to sign in once approved.' },
+        { status: 403 }
+      )
+    }
+    if (user.approvalStatus === 'rejected') {
+      return Response.json(
+        { error: 'Your account request was declined. Contact your administrator.' },
+        { status: 403 }
+      )
+    }
+
     if (user.isBlocked || user.isActive === false) {
       return Response.json(
         { error: 'This account has been suspended. Contact your administrator.' },

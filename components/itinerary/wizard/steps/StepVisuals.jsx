@@ -26,9 +26,18 @@ export default function StepVisuals({ form, update }) {
     const token = localStorage.getItem('token')
     fetch('/api/gallery', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((d) => setGallery(d.gallery || []))
+      .then((d) => {
+        const items = d.gallery || []
+        setGallery(items)
+        // Gallery images are covers by default — no manual selection step needed.
+        if (selected.length === 0 && items.length > 0) {
+          const autoSelected = items.slice(0, 4).map((item) => item.url)
+          update({ gallery: autoSelected, bannerImage: autoSelected[0] || '' })
+        }
+      })
       .catch(() => {})
       .finally(() => setGalleryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const toggleImage = (url) => {
@@ -58,7 +67,7 @@ export default function StepVisuals({ form, update }) {
         <CardHeader>
           <CardTitle>Cover images</CardTitle>
           <CardDescription>
-            Select up to 4 images from your agency gallery. The first image is used as the primary cover.
+            The first 4 images from your agency gallery are used as covers automatically. Click an image to remove it, or click a gallery image to add it back (up to 4). The first image is used as the primary cover.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -100,7 +109,7 @@ export default function StepVisuals({ form, update }) {
             })}
           </div>
           )}
-          <p className="mt-3 text-sm text-muted-foreground">{selected.length}/4 images selected</p>
+          <p className="mt-3 text-sm text-muted-foreground">{selected.length}/4 cover images</p>
         </CardContent>
       </Card>
 

@@ -19,8 +19,8 @@ export async function PUT(request, { params }) {
 
     const { id } = params
 
-    const notification = await Notification.findByIdAndUpdate(
-      id,
+    const notification = await Notification.findOneAndUpdate(
+      { _id: id, userId: decoded.userId },
       {
         isRead: true,
         readAt: new Date(),

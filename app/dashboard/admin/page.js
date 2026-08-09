@@ -124,7 +124,7 @@ export default function AdminPage() {
       toast.error(data.error || 'Failed to add employee')
       return
     }
-    toast.success('Employee added')
+    toast.success(data.message || 'Employee added')
     setAddOpen(false)
     setNewUser({ name: '', email: '', password: '', role: 'agent', leadAssignmentWeight: 1 })
     fetchAll()
@@ -278,7 +278,11 @@ export default function AdminPage() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        {!u.isActive || u.isBlocked ? (
+                        {u.approvalStatus === 'pending' ? (
+                          <Badge className="bg-warning text-white">Pending approval</Badge>
+                        ) : u.approvalStatus === 'rejected' ? (
+                          <Badge variant="destructive">Declined</Badge>
+                        ) : !u.isActive || u.isBlocked ? (
                           <Badge variant="destructive">Suspended</Badge>
                         ) : (
                           <Badge variant="outline">Active</Badge>
