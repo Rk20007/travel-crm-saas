@@ -2,7 +2,7 @@ import connectDB from '@/lib/mongodb'
 import Team from '@/models/Team'
 import { hashInboundApiKey } from '@/lib/workspaceApiKey'
 import { rateLimit } from '@/lib/rate-limit'
-import { getPlanLimits } from '@/lib/plans'
+import { resolveTeamLimits } from '@/lib/plans'
 import { ingestLead } from '@/lib/leadIngest'
 
 /**
@@ -54,7 +54,7 @@ export async function POST(request) {
       return Response.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const limits = getPlanLimits(team.plan || 'basic')
+    const limits = await resolveTeamLimits(team)
     if (!limits.apiIngest) {
       return Response.json(
         {

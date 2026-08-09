@@ -40,17 +40,40 @@ const teamSchema = new mongoose.Schema(
       required: true,
     },
 
-    /** Workspace / SaaS billing (Team = isolated workspace) */
+    /**
+     * Workspace / SaaS billing (Team = isolated workspace).
+     * Not an enum — plan keys are rows in the Plan collection, which the
+     * platform super admin can add to at runtime.
+     */
     plan: {
       type: String,
-      enum: ['basic', 'standard', 'premium'],
       default: 'basic',
+      lowercase: true,
+      trim: true,
     },
     subscriptionStatus: {
       type: String,
       enum: ['trialing', 'active', 'past_due', 'cancelled'],
       default: 'trialing',
     },
+    /**
+     * Per-agency limit overrides set by the super admin. Only the keys present
+     * here deviate from the plan; everything else inherits. Resolved by
+     * lib/plans.js → resolveTeamLimits().
+     */
+    planOverrides: {
+      maxBrands: Number,
+      maxAgents: Number,
+      maxLeadsPerMonth: Number,
+      automation: Boolean,
+      whatsappAutomation: Boolean,
+      apiIngest: Boolean,
+    },
+    /** Set when the super admin suspends the agency (isActive = false). */
+    suspendedAt: Date,
+    suspensionReason: String,
+    /** Internal super-admin-only notes; never exposed to agency users. */
+    platformNotes: String,
     walletCredits: {
       type: Number,
       default: 0,

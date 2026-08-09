@@ -25,6 +25,9 @@ import {
   Car,
   Wallet,
   Receipt,
+  Building,
+  UsersRound,
+  Layers,
 } from 'lucide-react'
 import {
   Select,
@@ -36,6 +39,7 @@ import {
 import { scheduleSilentRefresh } from '@/lib/auth-client'
 import { getNavItems, ROLE_LABELS, getDashboardRoute, canAccessLeads } from '@/lib/permissions-client'
 import { Toaster } from '@/components/ui/sonner'
+import { ImpersonationBanner } from '@/components/crm/ImpersonationBanner'
 import { cn } from '@/lib/utils'
 
 export default function DashboardLayout({ children }) {
@@ -163,6 +167,9 @@ export default function DashboardLayout({ children }) {
     const items = getNavItems(user.role)
     const icons = {
       '/dashboard/platform': Globe,
+      '/dashboard/platform/agencies': Building,
+      '/dashboard/platform/users': UsersRound,
+      '/dashboard/platform/plans': Layers,
       '/dashboard/owner': Home,
       '/dashboard/sales': Home,
       '/dashboard/operations': Home,
@@ -369,6 +376,7 @@ export default function DashboardLayout({ children }) {
           contentMarginClass
         )}
       >
+        <ImpersonationBanner />
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 safe-top sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             {isMobile && (

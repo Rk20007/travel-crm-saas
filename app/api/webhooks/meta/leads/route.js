@@ -2,7 +2,7 @@ import connectDB from '@/lib/mongodb'
 import Team from '@/models/Team'
 import { ingestLead } from '@/lib/leadIngest'
 import { parseMetaFieldData } from '@/lib/metaLeadParser'
-import { getPlanLimits } from '@/lib/plans'
+import { resolveTeamLimits } from '@/lib/plans'
 import crypto from 'crypto'
 
 const VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN || 'travel_crm_verify'
@@ -72,7 +72,7 @@ export async function POST(request) {
       if (!team) {
         return Response.json({ error: 'Invalid API key' }, { status: 401 })
       }
-      const limits = getPlanLimits(team.plan || 'basic')
+      const limits = await resolveTeamLimits(team)
       if (!limits.apiIngest) {
         return Response.json({ error: 'API ingest not enabled on plan' }, { status: 403 })
       }
@@ -105,7 +105,7 @@ export async function POST(request) {
         continue
       }
 
-      const limits = getPlanLimits(team.plan || 'basic')
+      const limits = await resolveTeamLimits(team)
       if (!limits.apiIngest) {
         results.push({ pageId, error: 'Plan does not support lead ingest' })
         continue

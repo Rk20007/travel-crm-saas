@@ -97,6 +97,25 @@ export async function POST(request) {
       ''
 
     const fresh = await User.findById(user._id)
+
+    // Same suspension gate as password login — otherwise a blocked user could
+    // simply switch to the Google button.
+    if (fresh.isBlocked || fresh.isActive === false) {
+      return Response.json(
+        { error: 'This account has been suspended. Contact your administrator.' },
+        { status: 403 }
+      )
+    }
+    if (fresh.teamId) {
+      const workspace = await Team.findById(fresh.teamId).select('isActive').lean()
+      if (workspace && workspace.isActive === false) {
+        return Response.json(
+          { error: 'This workspace has been suspended. Contact support.' },
+          { status: 403 }
+        )
+      }
+    }
+
     const { accessToken, refreshToken } = await issueSession(fresh, {
       userAgent: ua,
       ip,

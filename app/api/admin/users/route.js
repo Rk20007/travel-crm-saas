@@ -1,10 +1,14 @@
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
+import Team from '@/models/Team'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import { hashPassword } from '@/lib/auth'
+import { resolveTeamLimits } from '@/lib/plans'
 import mongoose from 'mongoose'
 
 const ASSIGNABLE_ROLES = ['agent', 'manager', 'operations', 'accounts', 'admin']
+/** Roles that consume a plan seat (the owner doesn't). */
+const STAFF_ROLES = ['agent', 'manager', 'operations', 'accounts']
 
 export async function GET(request) {
   try {
@@ -57,6 +61,26 @@ export async function POST(request) {
     const existing = await User.findOne({ email: email.toLowerCase() })
     if (existing) {
       return Response.json({ error: 'Email already registered' }, { status: 409 })
+    }
+
+    // Seat limit comes from the agency's plan, plus any per-agency override the
+    // platform admin has granted. The owner seat itself doesn't consume one.
+    const team = await Team.findById(authResult.user.teamId).select('plan planOverrides').lean()
+    if (team) {
+      const limits = await resolveTeamLimits(team)
+      const seatsUsed = await User.countDocuments({
+        teamId: authResult.user.teamId,
+        role: { $in: ['agent', 'manager', 'operations', 'accounts'] },
+        isActive: true,
+      })
+      if (STAFF_ROLES.includes(role) && seatsUsed >= limits.maxAgents) {
+        return Response.json(
+          {
+            error: `Plan limit reached (${limits.maxAgents} staff seats). Upgrade your plan to add more.`,
+          },
+          { status: 403 }
+        )
+      }
     }
 
     const user = await User.create({

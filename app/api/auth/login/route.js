@@ -1,5 +1,6 @@
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
+import Team from '@/models/Team'
 import { comparePasswords } from '@/lib/auth'
 import { issueSession, publicUser } from '@/lib/session'
 
@@ -39,6 +40,25 @@ export async function POST(request) {
         { error: 'Invalid credentials' },
         { status: 401 }
       )
+    }
+
+    // Checked after the password so a wrong password and a suspended account
+    // are indistinguishable to someone probing for valid emails.
+    if (user.isBlocked || user.isActive === false) {
+      return Response.json(
+        { error: 'This account has been suspended. Contact your administrator.' },
+        { status: 403 }
+      )
+    }
+
+    if (user.teamId) {
+      const team = await Team.findById(user.teamId).select('isActive').lean()
+      if (team && team.isActive === false) {
+        return Response.json(
+          { error: 'This workspace has been suspended. Contact support.' },
+          { status: 403 }
+        )
+      }
     }
 
     user.lastLogin = new Date()
