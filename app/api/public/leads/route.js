@@ -2,7 +2,6 @@ import connectDB from '@/lib/mongodb'
 import Team from '@/models/Team'
 import { hashInboundApiKey } from '@/lib/workspaceApiKey'
 import { rateLimit } from '@/lib/rate-limit'
-import { resolveTeamLimits } from '@/lib/plans'
 import { ingestLead } from '@/lib/leadIngest'
 
 /**
@@ -52,16 +51,6 @@ export async function POST(request) {
     const team = await Team.findOne({ inboundApiKeyHash: hash })
     if (!team) {
       return Response.json({ error: 'Invalid API key' }, { status: 401 })
-    }
-
-    const limits = await resolveTeamLimits(team)
-    if (!limits.apiIngest) {
-      return Response.json(
-        {
-          error: 'API ingest is not enabled on your plan (Standard+ required).',
-        },
-        { status: 403 }
-      )
     }
 
     const body = await request.json()

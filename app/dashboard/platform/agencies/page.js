@@ -58,11 +58,9 @@ const EMPTY_AGENCY = {
 
 export default function AgenciesPage() {
   const [rows, setRows] = useState([])
-  const [plans, setPlans] = useState([])
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [planFilter, setPlanFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
@@ -93,18 +91,16 @@ export default function AgenciesPage() {
     try {
       const qs = new URLSearchParams({ page: String(page), limit: '25' })
       if (search.trim()) qs.set('search', search.trim())
-      if (planFilter !== 'all') qs.set('plan', planFilter)
       if (statusFilter !== 'all') qs.set('status', statusFilter)
       const data = await saFetch(`/api/superadmin/agencies?${qs}`)
       setRows(data.agencies || [])
-      setPlans(data.plans || [])
       setPagination(data.pagination || { page: 1, pages: 1, total: 0 })
     } catch (e) {
       toast.error(e.message)
     } finally {
       setLoading(false)
     }
-  }, [page, search, planFilter, statusFilter])
+  }, [page, search, statusFilter])
 
   useEffect(() => {
     if (!guardSuperadmin()) return
@@ -159,7 +155,7 @@ export default function AgenciesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Every tenant on the platform. Create agencies, change plans, suspend access, or jump in as the owner for support."
+        description="Every tenant on the platform. Create agencies, suspend access, or jump in as the owner for support."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -182,25 +178,6 @@ export default function AgenciesPage() {
               }}
             />
           </div>
-          <Select
-            value={planFilter}
-            onValueChange={(v) => {
-              setPage(1)
-              setPlanFilter(v)
-            }}
-          >
-            <SelectTrigger className="w-full sm:w-44">
-              <SelectValue placeholder="Plan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All plans</SelectItem>
-              {plans.map((p) => (
-                <SelectItem key={p.key} value={p.key}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select
             value={statusFilter}
             onValueChange={(v) => {
@@ -230,7 +207,6 @@ export default function AgenciesPage() {
                 <TableRow>
                   <TableHead>Agency</TableHead>
                   <TableHead>Owner</TableHead>
-                  <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Users</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
@@ -242,13 +218,13 @@ export default function AgenciesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-12 text-center">
+                    <TableCell colSpan={8} className="py-12 text-center">
                       <Loader2 className="inline h-6 w-6 animate-spin" />
                     </TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                       No agencies match these filters.
                     </TableCell>
                   </TableRow>
@@ -267,11 +243,6 @@ export default function AgenciesPage() {
                       <TableCell className="text-sm">
                         {a.owner?.name || '—'}
                         <p className="text-xs text-muted-foreground">{a.owner?.email || ''}</p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {a.plan || 'basic'}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         {a.isActive === false ? (
@@ -361,41 +332,22 @@ export default function AgenciesPage() {
                 placeholder="Himalayan Trails Pvt Ltd"
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Plan</Label>
-                <Select value={draft.plan} onValueChange={(plan) => setDraft({ ...draft, plan })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans
-                      .filter((p) => p.isActive !== false)
-                      .map((p) => (
-                        <SelectItem key={p.key} value={p.key}>
-                          {p.name} · {formatINR(p.priceMonthly)}/mo
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Subscription</Label>
-                <Select
-                  value={draft.subscriptionStatus}
-                  onValueChange={(subscriptionStatus) => setDraft({ ...draft, subscriptionStatus })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="trialing">Trialing</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="past_due">Past due</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label>Subscription</Label>
+              <Select
+                value={draft.subscriptionStatus}
+                onValueChange={(subscriptionStatus) => setDraft({ ...draft, subscriptionStatus })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trialing">Trialing</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="past_due">Past due</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Default brand name</Label>

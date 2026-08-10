@@ -2,7 +2,6 @@ import connectDB from '@/lib/mongodb'
 import Brand from '@/models/Brand'
 import Team from '@/models/Team'
 import { authenticate, requireRoles } from '@/lib/middleware'
-import { resolveTeamLimits } from '@/lib/plans'
 
 export async function GET(request) {
   try {
@@ -40,20 +39,6 @@ export async function POST(request) {
     const team = await Team.findById(authResult.user.teamId)
     if (!team) {
       return Response.json({ error: 'Workspace not found' }, { status: 404 })
-    }
-
-    const limits = await resolveTeamLimits(team)
-    const existing = await Brand.countDocuments({
-      teamId: team._id,
-      isActive: true,
-    })
-    if (existing >= limits.maxBrands) {
-      return Response.json(
-        {
-          error: `Plan limit reached (${limits.maxBrands} brands for ${team.plan}). Upgrade to add more.`,
-        },
-        { status: 403 }
-      )
     }
 
     const body = await request.json()

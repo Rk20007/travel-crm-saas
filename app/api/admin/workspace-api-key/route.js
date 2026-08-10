@@ -2,7 +2,6 @@ import connectDB from '@/lib/mongodb'
 import Team from '@/models/Team'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import { generateInboundApiKey } from '@/lib/workspaceApiKey'
-import { resolveTeamLimits } from '@/lib/plans'
 
 export async function GET(request) {
   try {
@@ -18,13 +17,12 @@ export async function GET(request) {
 
     await connectDB()
     const team = await Team.findById(authResult.user.teamId).select(
-      'inboundApiKeyCreatedAt metaPageId plan planOverrides'
+      'inboundApiKeyCreatedAt metaPageId plan'
     )
     if (!team) {
       return Response.json({ error: 'Workspace not found' }, { status: 404 })
     }
 
-    const limits = await resolveTeamLimits(team)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
     return Response.json({
@@ -32,7 +30,7 @@ export async function GET(request) {
       apiKeyCreatedAt: team.inboundApiKeyCreatedAt,
       metaPageId: team.metaPageId || '',
       plan: team.plan,
-      apiIngestEnabled: limits.apiIngest,
+      apiIngestEnabled: true,
       endpoints: {
         publicLeads: `${baseUrl}/api/public/leads`,
         metaWebhook: `${baseUrl}/api/webhooks/meta/leads`,

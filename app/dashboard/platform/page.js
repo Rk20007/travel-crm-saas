@@ -10,7 +10,6 @@ import {
   Users,
   TrendingUp,
   DollarSign,
-  Layers,
   ArrowRight,
   Loader2,
   AlertCircle,
@@ -62,22 +61,14 @@ export default function PlatformDashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        description="Platform-wide control: agencies, users, subscriptions and plan limits."
+        description="Platform-wide control: agencies, users and demo requests."
         actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href="/dashboard/platform/plans">
-                <Layers className="mr-2 h-4 w-4" />
-                Plans &amp; Limits
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href="/dashboard/platform/agencies">
-                <Building2 className="mr-2 h-4 w-4" />
-                Manage Agencies
-              </Link>
-            </Button>
-          </>
+          <Button asChild>
+            <Link href="/dashboard/platform/agencies">
+              <Building2 className="mr-2 h-4 w-4" />
+              Manage Agencies
+            </Link>
+          </Button>
         }
       />
 
@@ -136,27 +127,16 @@ export default function PlatformDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Plan Distribution</CardTitle>
-            <CardDescription>Agencies per subscription plan.</CardDescription>
+            <CardTitle>Demo Requests</CardTitle>
+            <CardDescription>New agencies come in through the "Book a Demo" form.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {(data?.plans || []).map((p) => {
-              const count = data?.planCounts?.[p.key] || 0
-              const pct = t.agencies ? Math.round((count / t.agencies) * 100) : 0
-              return (
-                <div key={p.key}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium">{p.name}</span>
-                    <span className="text-muted-foreground">
-                      {count} · {formatINR(p.priceMonthly)}/mo
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Review incoming requests and provision a workspace for each one directly from there.
+            </p>
+            <Button asChild className="mt-4 w-full">
+              <Link href="/dashboard/platform/demo-requests">Open Demo Requests</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -176,9 +156,9 @@ export default function PlatformDashboardPage() {
             icon: UserPlus,
           },
           {
-            href: '/dashboard/platform/plans',
-            title: 'Plans & Limits',
-            body: 'Define plans, pricing and the caps that gate brands, seats, leads and automation.',
+            href: '/dashboard/platform/demo-requests',
+            title: 'Demo Requests',
+            body: 'Leads from the marketing site — convert one into an agency in a click.',
             icon: ShieldCheck,
           },
         ].map((c) => {

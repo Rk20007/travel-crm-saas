@@ -27,7 +27,6 @@ import {
   Receipt,
   Building,
   UsersRound,
-  Layers,
   PhoneCall,
 } from 'lucide-react'
 import {
@@ -172,7 +171,6 @@ export default function DashboardLayout({ children }) {
       '/dashboard/platform/demo-requests': PhoneCall,
       '/dashboard/platform/agencies': Building,
       '/dashboard/platform/users': UsersRound,
-      '/dashboard/platform/plans': Layers,
       '/dashboard/owner': Home,
       '/dashboard/sales': Home,
       '/dashboard/operations': Home,
