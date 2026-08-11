@@ -10,6 +10,7 @@ import Plan from '@/models/Plan'
 import RefreshToken from '@/models/RefreshToken'
 import { requireSuperadmin, denied, recordPlatformAudit } from '@/lib/superadmin'
 import { resolveTeamLimits, sanitizeLimits, LIMIT_KEYS } from '@/lib/plans'
+import { addOneMonth } from '@/lib/subscription'
 import { tenantScopedModels } from '@/lib/registerModels'
 
 const SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'cancelled']
@@ -101,9 +102,28 @@ export async function PATCH(request, { params }) {
       name: team.name,
       plan: team.plan,
       subscriptionStatus: team.subscriptionStatus,
+      subscriptionExpiresAt: team.subscriptionExpiresAt,
       isActive: team.isActive,
       walletCredits: team.walletCredits,
       planOverrides: team.planOverrides ? { ...team.planOverrides } : {},
+    }
+
+    // Renew — push access out another calendar month from whichever is later:
+    // right now, or the current expiry (so renewing early doesn't waste the
+    // time still left). Also flips the agency back on if it had lapsed.
+    const isRenewal = body.renew === true
+    if (isRenewal) {
+      const base =
+        team.subscriptionExpiresAt && new Date(team.subscriptionExpiresAt) > new Date()
+          ? new Date(team.subscriptionExpiresAt)
+          : new Date()
+      team.subscriptionExpiresAt = addOneMonth(base)
+      team.subscriptionStatus = 'active'
+      if (!team.isActive) {
+        team.isActive = true
+        team.suspendedAt = undefined
+        team.suspensionReason = undefined
+      }
     }
 
     if (typeof body.name === 'string' && body.name.trim()) team.name = body.name.trim()
@@ -164,6 +184,7 @@ export async function PATCH(request, { params }) {
 
     // Suspending an agency has to end its users' sessions too, otherwise their
     // existing refresh tokens keep minting fresh access tokens for a week.
+    const reactivating = team.isActive && !before.isActive
     if (typeof body.isActive === 'boolean' && !body.isActive) {
       const memberIds = await User.find({ teamId: team._id }).distinct('_id')
       await User.updateMany({ teamId: team._id }, { isActive: false })
@@ -171,13 +192,14 @@ export async function PATCH(request, { params }) {
         { userId: { $in: memberIds }, revokedAt: null },
         { revokedAt: new Date() }
       )
-    } else if (typeof body.isActive === 'boolean' && body.isActive) {
+    } else if (reactivating) {
       // Restore access, but leave individually-blocked users blocked.
       await User.updateMany({ teamId: team._id, isBlocked: { $ne: true } }, { isActive: true })
     }
 
-    const action =
-      typeof body.isActive === 'boolean'
+    const action = isRenewal
+      ? 'renew'
+      : typeof body.isActive === 'boolean'
         ? body.isActive
           ? 'activate'
           : 'suspend'
@@ -190,13 +212,16 @@ export async function PATCH(request, { params }) {
       entity: 'agency',
       entityId: team._id,
       action,
-      summary: `Updated agency "${team.name}"`,
+      summary: isRenewal
+        ? `Renewed agency "${team.name}" through ${team.subscriptionExpiresAt.toDateString()}`
+        : `Updated agency "${team.name}"`,
       changes: {
         before,
         after: {
           name: team.name,
           plan: team.plan,
           subscriptionStatus: team.subscriptionStatus,
+          subscriptionExpiresAt: team.subscriptionExpiresAt,
           isActive: team.isActive,
           walletCredits: team.walletCredits,
           planOverrides: team.planOverrides ? { ...team.planOverrides } : {},

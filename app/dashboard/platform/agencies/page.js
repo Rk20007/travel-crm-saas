@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -36,6 +37,15 @@ import { TableShell } from '@/components/crm/TableShell'
 import { guardSuperadmin, saFetch, formatINR, formatDate } from '@/lib/superadmin-client'
 import { startImpersonation } from '@/lib/impersonation'
 
+function expiryLabel(date) {
+  if (!date) return <span className="text-muted-foreground">—</span>
+  const days = Math.ceil((new Date(date).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return <span className="text-destructive font-medium">Expired</span>
+  if (days === 0) return <span className="text-destructive font-medium">Expires today</span>
+  if (days <= 7) return <span className="text-amber-500 font-medium">{days}d left</span>
+  return <span className="text-muted-foreground">{days}d left</span>
+}
+
 const STATUS_FILTERS = [
   { value: 'all', label: 'All statuses' },
   { value: 'active', label: 'Active' },
@@ -49,11 +59,20 @@ const EMPTY_AGENCY = {
   name: '',
   plan: 'basic',
   subscriptionStatus: 'trialing',
+  subscriptionExpiresAt: '',
   ownerName: '',
   ownerEmail: '',
   ownerPassword: '',
   ownerPhone: '',
   brandName: '',
+}
+
+/** yyyy-mm-dd, 1 calendar month from today — the default access window shown
+ * (and editable) in the New Agency form. */
+function defaultExpiryDate() {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return d.toISOString().slice(0, 10)
 }
 
 export default function AgenciesPage() {
@@ -65,7 +84,7 @@ export default function AgenciesPage() {
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [draft, setDraft] = useState(EMPTY_AGENCY)
+  const [draft, setDraft] = useState(() => ({ ...EMPTY_AGENCY, subscriptionExpiresAt: defaultExpiryDate() }))
   const [demoId, setDemoId] = useState(null)
 
   // Arriving from a "Book a Demo" request pre-fills the create-agency form
@@ -122,7 +141,7 @@ export default function AgenciesPage() {
         setDemoId(null)
       }
       setCreateOpen(false)
-      setDraft(EMPTY_AGENCY)
+      setDraft({ ...EMPTY_AGENCY, subscriptionExpiresAt: defaultExpiryDate() })
       setPage(1)
       load()
     } catch (e) {
@@ -208,6 +227,7 @@ export default function AgenciesPage() {
                   <TableHead>Agency</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Expires</TableHead>
                   <TableHead className="text-right">Users</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
@@ -218,13 +238,13 @@ export default function AgenciesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center">
+                    <TableCell colSpan={9} className="py-12 text-center">
                       <Loader2 className="inline h-6 w-6 animate-spin" />
                     </TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                       No agencies match these filters.
                     </TableCell>
                   </TableRow>
@@ -253,6 +273,7 @@ export default function AgenciesPage() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-sm">{expiryLabel(a.subscriptionExpiresAt)}</TableCell>
                       <TableCell className="text-right tabular-nums">{a.userCount}</TableCell>
                       <TableCell className="text-right tabular-nums">{a.leadCount}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatINR(a.revenue)}</TableCell>
@@ -332,22 +353,33 @@ export default function AgenciesPage() {
                 placeholder="Himalayan Trails Pvt Ltd"
               />
             </div>
-            <div>
-              <Label>Subscription</Label>
-              <Select
-                value={draft.subscriptionStatus}
-                onValueChange={(subscriptionStatus) => setDraft({ ...draft, subscriptionStatus })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="trialing">Trialing</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="past_due">Past due</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Subscription</Label>
+                <Select
+                  value={draft.subscriptionStatus}
+                  onValueChange={(subscriptionStatus) => setDraft({ ...draft, subscriptionStatus })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trialing">Trialing</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="past_due">Past due</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Access until *</Label>
+                <Input
+                  type="date"
+                  value={draft.subscriptionExpiresAt}
+                  onChange={(e) => setDraft({ ...draft, subscriptionExpiresAt: e.target.value })}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Defaults to 1 month from today.</p>
+              </div>
             </div>
             <div>
               <Label>Default brand name</Label>
@@ -385,8 +417,7 @@ export default function AgenciesPage() {
                 </div>
                 <div>
                   <Label>Temporary password *</Label>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     value={draft.ownerPassword}
                     onChange={(e) => setDraft({ ...draft, ownerPassword: e.target.value })}
                     placeholder="Minimum 8 characters"

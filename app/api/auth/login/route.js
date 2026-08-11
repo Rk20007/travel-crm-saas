@@ -3,6 +3,7 @@ import User from '@/models/User'
 import Team from '@/models/Team'
 import { comparePasswords } from '@/lib/auth'
 import { issueSession, publicUser } from '@/lib/session'
+import { isSubscriptionExpired } from '@/lib/subscription'
 
 export async function POST(request) {
   try {
@@ -64,11 +65,22 @@ export async function POST(request) {
       )
     }
 
-    if (user.teamId) {
-      const team = await Team.findById(user.teamId).select('isActive').lean()
+    // Super admins are platform-level — a workspace being suspended/expired
+    // (they can even be seeded with a home teamId, e.g. the platform's own
+    // "workspace") must never lock them out of the panel that manages it.
+    if (user.teamId && user.role !== 'superadmin') {
+      const team = await Team.findById(user.teamId)
+        .select('isActive subscriptionExpiresAt')
+        .lean()
       if (team && team.isActive === false) {
         return Response.json(
           { error: 'This workspace has been suspended. Contact support.' },
+          { status: 403 }
+        )
+      }
+      if (isSubscriptionExpired(team)) {
+        return Response.json(
+          { error: 'This workspace\'s subscription has expired. Contact your platform admin to renew.' },
           { status: 403 }
         )
       }

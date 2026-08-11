@@ -42,6 +42,7 @@ const auditLogSchema = new mongoose.Schema(
         'seed',
         'suspend',
         'activate',
+        'renew',
         'plan_change',
         'password_reset',
         'impersonate_start',

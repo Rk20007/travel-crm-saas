@@ -7,6 +7,7 @@ import Script from 'next/script'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { AlertCircle } from 'lucide-react'
 import { getDashboardRoute } from '@/lib/permissions-client'
 
@@ -160,8 +161,7 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium mb-2">Password</label>
-            <Input
-              type="password"
+            <PasswordInput
               name="password"
               value={formData.password}
               onChange={handleChange}

@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -449,8 +450,7 @@ export default function PlatformUsersPage() {
             </div>
             <div>
               <Label>Password * (min 8 characters)</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={draft.password}
                 onChange={(e) => setDraft({ ...draft, password: e.target.value })}
               />
@@ -518,8 +518,7 @@ export default function PlatformUsersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Input
-              type="password"
+            <PasswordInput
               placeholder="New password (min 8 characters)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}

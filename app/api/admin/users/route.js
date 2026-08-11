@@ -160,6 +160,21 @@ export async function PATCH(request) {
       return Response.json({ error: 'Cannot modify superadmin' }, { status: 403 })
     }
 
+    // The owner's own account is fixed — no self-demotion, self-suspension or
+    // self-block. (Password reset for yourself is still fine and allowed.)
+    const isSelf = String(target._id) === String(authResult.user.userId)
+    if (isSelf && target.role === 'admin') {
+      if (role && role !== target.role) {
+        return Response.json({ error: 'You cannot change your own owner role' }, { status: 400 })
+      }
+      if (isActive === false) {
+        return Response.json({ error: 'You cannot suspend yourself' }, { status: 400 })
+      }
+      if (isBlocked === true) {
+        return Response.json({ error: 'You cannot block yourself' }, { status: 400 })
+      }
+    }
+
     if (role) {
       const allowed = [...ASSIGNABLE_ROLES, 'superadmin']
       if (authResult.user.role === 'admin' && role === 'superadmin') {

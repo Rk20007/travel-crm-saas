@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   Images,
   Settings as SettingsIcon,
+  CalendarClock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -67,10 +68,13 @@ export default function SettingsPage() {
   const [active, setActive] = useState('lead_status')
   const [navSearch, setNavSearch] = useState('')
   const [mobileView, setMobileView] = useState('list')
+  const [subInfo, setSubInfo] = useState(null)
 
   useEffect(() => {
+    let role
     try {
       const u = JSON.parse(localStorage.getItem('user') || '{}')
+      role = u.role
       if (!['admin', 'superadmin'].includes(u.role)) {
         router.replace('/dashboard')
         return
@@ -80,6 +84,17 @@ export default function SettingsPage() {
       return
     }
     setReady(true)
+
+    // Only the agency owner sees the subscription notice — staff they add
+    // never reach /dashboard/settings at all (redirected above), but the
+    // fetch itself is also gated server-side to the `admin` role.
+    if (role === 'admin') {
+      const token = localStorage.getItem('token')
+      fetch('/api/team/subscription', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setSubInfo(d))
+        .catch(() => {})
+    }
   }, [router])
 
   const groups = useMemo(() => {
@@ -136,6 +151,43 @@ export default function SettingsPage() {
         title="Settings & Master Data"
         description="Owner-controlled configuration for every dropdown and master used across the CRM."
       />
+
+      {subInfo?.subscriptionExpiresAt && (() => {
+        const days = Math.ceil(
+          (new Date(subInfo.subscriptionExpiresAt).getTime() - Date.now()) / 86_400_000
+        )
+        const expired = days < 0
+        return (
+          <Card
+            className={cn(
+              'flex items-center gap-3 border p-4',
+              expired || days <= 7 ? 'border-destructive/40 bg-destructive/5' : ''
+            )}
+          >
+            <CalendarClock
+              className={cn('h-5 w-5 shrink-0', expired || days <= 7 ? 'text-destructive' : 'text-primary')}
+            />
+            <p className="text-sm">
+              {expired ? (
+                <span className="font-medium text-destructive">
+                  Your subscription expired on {new Date(subInfo.subscriptionExpiresAt).toLocaleDateString('en-IN')}.
+                </span>
+              ) : (
+                <>
+                  Your subscription is valid until{' '}
+                  <span className="font-medium">
+                    {new Date(subInfo.subscriptionExpiresAt).toLocaleDateString('en-IN')}
+                  </span>{' '}
+                  <span className={days <= 7 ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+                    ({days} day{days === 1 ? '' : 's'} left)
+                  </span>
+                </>
+              )}{' '}
+              — contact your platform admin to renew.
+            </p>
+          </Card>
+        )
+      })()}
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr] lg:items-start">
         {/* Left navigation */}

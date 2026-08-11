@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   ArrowLeft,
+  CalendarClock,
   Loader2,
   Save,
   ShieldAlert,
@@ -134,6 +135,8 @@ export default function AgencyDetailPage() {
       walletCredits: Number(form.walletCredits),
       platformNotes: form.platformNotes,
     })
+
+  const renewSubscription = () => patch({ renew: true }, 'Subscription renewed for 1 month')
 
   const saveOverrides = () => {
     // `null` clears an override server-side; a blank field means the same here.
@@ -268,6 +271,46 @@ export default function AgencyDetailPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <CalendarClock className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Subscription access</p>
+              {agency.subscriptionExpiresAt ? (
+                (() => {
+                  const days = Math.ceil(
+                    (new Date(agency.subscriptionExpiresAt).getTime() - Date.now()) / 86_400_000
+                  )
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      {days < 0 ? (
+                        <span className="font-medium text-destructive">Expired {formatDate(agency.subscriptionExpiresAt)}</span>
+                      ) : (
+                        <>
+                          Expires {formatDate(agency.subscriptionExpiresAt)}{' '}
+                          <span className={days <= 7 ? 'font-medium text-amber-500' : ''}>
+                            ({days} day{days === 1 ? '' : 's'} left)
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  )
+                })()
+              ) : (
+                <p className="text-sm text-muted-foreground">No expiry set</p>
+              )}
+            </div>
+          </div>
+          <Button onClick={renewSubscription} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
+            Renew +1 month
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

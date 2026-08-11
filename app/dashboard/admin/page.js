@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -56,6 +57,7 @@ export default function AdminPage() {
     leadAssignmentWeight: 1,
   })
   const [newPassword, setNewPassword] = useState('')
+  const [currentUserId, setCurrentUserId] = useState('')
 
   const token = () => localStorage.getItem('token')
 
@@ -94,6 +96,7 @@ export default function AdminPage() {
         window.location.href = '/dashboard'
         return
       }
+      setCurrentUserId(String(u.userId || u.id || ''))
     } catch {}
     fetchAll()
   }, [])
@@ -256,26 +259,32 @@ export default function AdminPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((u) => (
+                  users.map((u) => {
+                    const isOwnerRow = u.role === 'admin' && String(u._id) === currentUserId
+                    return (
                     <TableRow key={String(u._id)}>
                       <TableCell>{u.name}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
-                        <Select
-                          value={u.role}
-                          onValueChange={(role) => updateUser(u._id, { role })}
-                        >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ROLES.map((r) => (
-                              <SelectItem key={r.value} value={r.value}>
-                                {r.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {isOwnerRow ? (
+                          <Badge variant="outline">Owner</Badge>
+                        ) : (
+                          <Select
+                            value={u.role}
+                            onValueChange={(role) => updateUser(u._id, { role })}
+                          >
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROLES.map((r) => (
+                                <SelectItem key={r.value} value={r.value}>
+                                  {r.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </TableCell>
                       <TableCell>
                         {u.approvalStatus === 'pending' ? (
@@ -290,18 +299,21 @@ export default function AdminPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              updateUser(u._id, { isBlocked: !u.isBlocked, isActive: u.isBlocked })
-                            }
-                          >
-                            {u.isBlocked ? 'Unsuspend' : 'Suspend'}
-                          </Button>
+                          {!isOwnerRow && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                updateUser(u._id, { isBlocked: !u.isBlocked, isActive: u.isBlocked })
+                              }
+                            >
+                              {u.isBlocked ? 'Unsuspend' : 'Suspend'}
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" onClick={() => setResetOpen(u._id)}>
                             <KeyRound className="h-3 w-3" />
                           </Button>
+                          {!isOwnerRow && (
                           <Button
                             size="sm"
                             variant="destructive"
@@ -309,10 +321,12 @@ export default function AdminPage() {
                           >
                             Remove
                           </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
@@ -336,8 +350,7 @@ export default function AdminPage() {
             </div>
             <div>
               <Label>Password</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={newUser.password}
                 onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
               />
@@ -384,8 +397,7 @@ export default function AdminPage() {
             <DialogTitle>Reset Password</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Input
-              type="password"
+            <PasswordInput
               placeholder="New password (min 6 chars)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}

@@ -15,6 +15,7 @@ import {
   parsePaging,
 } from '@/lib/superadmin'
 import { seedDefaultPlans } from '@/lib/plans'
+import { addOneMonth } from '@/lib/subscription'
 
 /** GET /api/superadmin/agencies — paged, searchable list of every tenant. */
 export async function GET(request) {
@@ -44,7 +45,7 @@ export async function GET(request) {
     const [agencies, total, plans] = await Promise.all([
       Team.find(filter)
         .select(
-          'name email phone plan subscriptionStatus isActive walletCredits usage createdAt suspendedAt owner'
+          'name email phone plan subscriptionStatus subscriptionExpiresAt isActive walletCredits usage createdAt suspendedAt owner'
         )
         .populate('owner', 'name email')
         .sort({ createdAt: -1 })
@@ -135,6 +136,14 @@ export async function POST(request) {
       return Response.json({ error: `Unknown plan "${planKey}"` }, { status: 400 })
     }
 
+    // Super admin can pick the access end date directly in the form; falls
+    // back to the standard 1-month window if left blank or unparseable.
+    let subscriptionExpiresAt = addOneMonth()
+    if (body?.subscriptionExpiresAt) {
+      const parsed = new Date(body.subscriptionExpiresAt)
+      if (!Number.isNaN(parsed.getTime())) subscriptionExpiresAt = parsed
+    }
+
     const owner = await User.create({
       name: ownerName,
       email: ownerEmail,
@@ -154,6 +163,9 @@ export async function POST(request) {
         owner: owner._id,
         plan: planKey,
         subscriptionStatus: body?.subscriptionStatus || 'trialing',
+        // Defaults to 1 month of access from creation (editable in the form);
+        // the super admin extends it from the agency detail page after that.
+        subscriptionExpiresAt,
         platformNotes: body?.platformNotes || undefined,
         isActive: true,
       })

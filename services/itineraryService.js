@@ -4,6 +4,7 @@ import ItineraryHotel from '@/models/ItineraryHotel'
 import ItineraryActivity from '@/models/ItineraryActivity'
 import { tenantFilter, withTenantBody } from '@/lib/tenant'
 import { generateShareToken } from '@/utils/itinerary'
+import { canOnlyViewOwnLeads } from '@/lib/permissions'
 
 function parseDate(val) {
   if (!val) return undefined
@@ -31,6 +32,12 @@ function normalizeVisa(visa) {
 export async function listItineraries(authUser, options = {}) {
   const { page = 1, limit = 12, status, destination, search, assignedTo, leadId } = options
   const query = { ...tenantFilter(authUser) }
+  // Sales staff (agent/manager) only ever see itineraries they personally
+  // built — not the owner's, not another sales person's — same boundary as
+  // leads. Owner/operations/accounts/superadmin still see the whole workspace.
+  if (canOnlyViewOwnLeads(authUser.role)) {
+    query.createdBy = authUser.userId
+  }
   if (status) query.status = status
   if (destination) query.destination = new RegExp(destination, 'i')
   if (assignedTo) query.assignedTo = assignedTo
@@ -77,10 +84,14 @@ export async function listItineraries(authUser, options = {}) {
 }
 
 export async function getItineraryFull(id, authUser) {
+  // Same ownership boundary as the list — a sales rep hitting another
+  // itinerary's URL directly must not bypass the "own only" restriction.
+  const ownerScope = canOnlyViewOwnLeads(authUser.role) ? { createdBy: authUser.userId } : {}
+
   // These 4 queries are independent (days/hotels/activities only need `id`,
   // already known) — fire them together instead of one-at-a-time.
   const [itinerary, days, hotels, activities] = await Promise.all([
-    Itinerary.findOne({ _id: id, ...tenantFilter(authUser) })
+    Itinerary.findOne({ _id: id, ...tenantFilter(authUser), ...ownerScope })
       .populate('assignedTo', 'name email phone')
       .populate('createdBy', 'name email')
       .populate('leadId', 'firstName lastName email phone')
@@ -209,7 +220,8 @@ export async function createItinerary(authUser, body) {
 }
 
 export async function updateItinerary(id, authUser, body) {
-  const filter = { _id: id, ...tenantFilter(authUser) }
+  const ownerScope = canOnlyViewOwnLeads(authUser.role) ? { createdBy: authUser.userId } : {}
+  const filter = { _id: id, ...tenantFilter(authUser), ...ownerScope }
   const { days, hotels, ...rest } = body
   const updates = { ...rest }
   if (updates.startDate) updates.startDate = parseDate(updates.startDate)
@@ -231,7 +243,8 @@ export async function updateItinerary(id, authUser, body) {
 }
 
 export async function deleteItinerary(id, authUser) {
-  const filter = { _id: id, ...tenantFilter(authUser) }
+  const ownerScope = canOnlyViewOwnLeads(authUser.role) ? { createdBy: authUser.userId } : {}
+  const filter = { _id: id, ...tenantFilter(authUser), ...ownerScope }
   const itinerary = await Itinerary.findOneAndDelete(filter)
   if (!itinerary) return null
   await Promise.all([

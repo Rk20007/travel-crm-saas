@@ -57,6 +57,15 @@ const teamSchema = new mongoose.Schema(
       default: 'trialing',
     },
     /**
+     * When this agency's access runs out. Set on creation (1 month out) and
+     * pushed forward by the super admin's "Renew" action. Past this date the
+     * agency is locked out at login (and any live session is cut on its next
+     * silent refresh) even if `isActive` hasn't flipped yet — the daily cron
+     * (see app/api/cron/subscription-expiry) flips it so the agencies list
+     * reflects "Suspended" without needing a login attempt first.
+     */
+    subscriptionExpiresAt: Date,
+    /**
      * Per-agency limit overrides set by the super admin. Only the keys present
      * here deviate from the plan; everything else inherits. Resolved by
      * lib/plans.js → resolveTeamLimits().
