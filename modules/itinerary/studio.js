@@ -14,11 +14,18 @@ export function getRoomLines(stay) {
 }
 
 /** A stay's extra-bed/CNB cost — the trip-level extra bed/CNB counts, priced at this
- * hotel's rate and charged across the stay's longest room-line duration. */
+ * hotel's rate and charged across the stay's longest room-line duration.
+ *
+ * The hotel master (when available, e.g. live in the Costing step) is always
+ * the source of truth for the rate — a stay's own extraBedCharge/cnbPrice is
+ * only a snapshot taken when the hotel was picked, so it can go stale (e.g.
+ * still 0 from before the hotel's rates were set up in Settings) and there's
+ * no UI to edit it directly. Only fall back to that snapshot when no master
+ * is available at all (e.g. computing totals without the hotel list loaded). */
 export function getStayExtraCost(stay, master, extraBeds = 0, cnbCount = 0) {
   const nights = Math.max(0, ...getRoomLines(stay).map((l) => Number(l.nights) || 0))
-  const extraBedCharge = Number(stay?.extraBedCharge ?? master?.extraBedCharge) || 0
-  const cnbPrice = Number(stay?.cnbPrice ?? master?.cnbPrice) || 0
+  const extraBedCharge = Number(master ? master.extraBedCharge : stay?.extraBedCharge) || 0
+  const cnbPrice = Number(master ? master.cnbPrice : stay?.cnbPrice) || 0
   return nights * ((Number(extraBeds) || 0) * extraBedCharge + (Number(cnbCount) || 0) * cnbPrice)
 }
 
@@ -70,7 +77,7 @@ export function createNightStayFromHotelMaster(master, dayNumber = 1, category =
  * of which hotel tier the client picks. Returns [] unless at least two
  * distinct categories are in use, so a normal single-hotel itinerary is
  * unaffected. */
-export function computeCategoryTotals(form) {
+export function computeCategoryTotals(form, hotelMasters = []) {
   const nightStays = form.nightStays || []
   const categories = BUDGET_TIERS.map((t) => t.key).filter((key) =>
     nightStays.some((s) => s.category === key)
@@ -94,7 +101,8 @@ export function computeCategoryTotals(form) {
             const perNight = (Number(l.roomCount) || 1) * (Number(l.pricePerNight) || 0)
             return lineSum + nights * perNight
           }, 0)
-          return sum + roomsTotal + getStayExtraCost(s, undefined, extraBeds, cnbCount)
+          const master = hotelMasters.find((h) => h._id === s.hotelId)
+          return sum + roomsTotal + getStayExtraCost(s, master, extraBeds, cnbCount)
         }, 0)
       return { category, hotelTotal, total: hotelTotal + sharedTotal }
     })

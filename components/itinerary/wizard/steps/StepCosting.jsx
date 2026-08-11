@@ -78,6 +78,30 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelIdsKey, hotelMasters.length])
 
+  // Keep each stay's extra-bed/CNB rate snapshot in sync with its hotel's
+  // current master rate. Saving the itinerary computes totals from this
+  // snapshot alone (no hotel list available at that point), so a stay picked
+  // before its hotel had rates set up in Settings — or before a later rate
+  // change — would otherwise save with a stuck, stale (often 0) charge.
+  const staySyncKey = stays.map((s) => `${s.hotelId}:${s.extraBedCharge}:${s.cnbPrice}`).join('|')
+  useEffect(() => {
+    if (!hotelMasters.length) return
+    const additions = new Map()
+    for (const s of stays) {
+      const m = hotelMasters.find((hm) => hm._id === s.hotelId)
+      if (!m) continue
+      const extraBedCharge = m.extraBedCharge || 0
+      const cnbPrice = m.cnbPrice || 0
+      if (s.extraBedCharge === extraBedCharge && s.cnbPrice === cnbPrice) continue
+      additions.set(s, { ...s, extraBedCharge, cnbPrice })
+    }
+    if (additions.size === 0) return
+    update({
+      nightStays: (form.nightStays || []).map((s) => additions.get(s) || s),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staySyncKey, hotelMasters.length])
+
   const addNightStay = () => {
     update({
       nightStays: [
@@ -438,7 +462,7 @@ export default function StepCosting({ form, update }) {
   const baseTotal = nightStayTotal + vehicleTotal + activityTotal
   const extraChargesTotal = (form.extraCharges || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
   const calculated = baseTotal + extraChargesTotal
-  const categoryTotals = computeCategoryTotals(form)
+  const categoryTotals = computeCategoryTotals(form, hotelMasters)
 
   const setField = (key, value) => update({ [key]: value })
 
