@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -47,18 +46,6 @@ import { guardSuperadmin, saFetch, formatINR, formatDate } from '@/lib/superadmi
 import { startImpersonation } from '@/lib/impersonation'
 import { ROLE_LABELS } from '@/lib/permissions-client'
 
-const NUMERIC_LIMITS = [
-  { key: 'maxBrands', label: 'Max brands', usageKey: 'brands' },
-  { key: 'maxAgents', label: 'Max staff seats', usageKey: 'agents' },
-  { key: 'maxLeadsPerMonth', label: 'Leads / month', usageKey: 'leadsThisMonth' },
-]
-
-const FEATURE_LIMITS = [
-  { key: 'automation', label: 'Automation' },
-  { key: 'whatsappAutomation', label: 'WhatsApp automation' },
-  { key: 'apiIngest', label: 'API lead ingest' },
-]
-
 export default function AgencyDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -69,9 +56,6 @@ export default function AgencyDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(null)
-  // Override inputs are held as strings so an empty field can mean "inherit"
-  // rather than collapsing to 0.
-  const [overrides, setOverrides] = useState({})
   const [purgeOpen, setPurgeOpen] = useState(false)
   const [purgeConfirm, setPurgeConfirm] = useState('')
   const [purging, setPurging] = useState(false)
@@ -86,20 +70,10 @@ export default function AgencyDetailPage() {
         name: a.name || '',
         email: a.email || '',
         phone: a.phone || '',
-        plan: a.plan || 'basic',
         subscriptionStatus: a.subscriptionStatus || 'trialing',
         walletCredits: a.walletCredits ?? 0,
         isActive: a.isActive !== false,
         platformNotes: a.platformNotes || '',
-      })
-      const o = a.planOverrides || {}
-      setOverrides({
-        maxBrands: o.maxBrands ?? '',
-        maxAgents: o.maxAgents ?? '',
-        maxLeadsPerMonth: o.maxLeadsPerMonth ?? '',
-        automation: o.automation,
-        whatsappAutomation: o.whatsappAutomation,
-        apiIngest: o.apiIngest,
       })
     } catch (e) {
       setError(e.message)
@@ -131,23 +105,10 @@ export default function AgencyDetailPage() {
       name: form.name,
       email: form.email,
       phone: form.phone,
-      plan: form.plan,
       subscriptionStatus: form.subscriptionStatus,
       walletCredits: Number(form.walletCredits),
       platformNotes: form.platformNotes,
     })
-
-  const saveOverrides = () => {
-    // `null` clears an override server-side; a blank field means the same here.
-    const payload = {}
-    for (const { key } of NUMERIC_LIMITS) {
-      payload[key] = overrides[key] === '' || overrides[key] === null ? null : Number(overrides[key])
-    }
-    for (const { key } of FEATURE_LIMITS) {
-      payload[key] = overrides[key] === undefined ? null : overrides[key]
-    }
-    return patch({ planOverrides: payload }, 'Limit overrides saved')
-  }
 
   const toggleSuspension = async () => {
     const suspending = form.isActive
@@ -216,7 +177,7 @@ export default function AgencyDetailPage() {
     )
   }
 
-  const { agency, users, brands, plans, limits, usage } = data
+  const { agency, users, brands, usage } = data
 
   return (
     <div className="space-y-6">
@@ -271,163 +232,67 @@ export default function AgencyDetailPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile &amp; Subscription</CardTitle>
-            <CardDescription>Billing plan, status and workspace contact details.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Status and workspace contact details.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Agency name</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Agency name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Email</Label>
-                <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Plan</Label>
-                <Select value={form.plan} onValueChange={(plan) => setForm({ ...form, plan })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((p) => (
-                      <SelectItem key={p.key} value={p.key}>
-                        {p.name} · {formatINR(p.priceMonthly)}/mo
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Subscription status</Label>
-                <Select
-                  value={form.subscriptionStatus}
-                  onValueChange={(subscriptionStatus) => setForm({ ...form, subscriptionStatus })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="trialing">Trialing</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="past_due">Past due</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Label>Email</Label>
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div>
-              <Label>Wallet credits</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.walletCredits}
-                onChange={(e) => setForm({ ...form, walletCredits: e.target.value })}
-              />
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
-            <div>
-              <Label>Internal notes</Label>
-              <Textarea
-                rows={3}
-                value={form.platformNotes}
-                onChange={(e) => setForm({ ...form, platformNotes: e.target.value })}
-                placeholder="Only visible to platform admins."
-              />
-            </div>
-            <Button onClick={saveProfile} disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save changes
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Limits &amp; Overrides</CardTitle>
-            <CardDescription>
-              Blank inherits the plan value. Anything you set here applies to this agency only.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {NUMERIC_LIMITS.map((l) => {
-              const used = usage[l.usageKey] ?? 0
-              const effective = limits[l.key]
-              const pct = effective ? Math.min(100, Math.round((used / effective) * 100)) : 0
-              return (
-                <div key={l.key} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <Label className="text-sm">{l.label}</Label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {used} / {effective}
-                      </span>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-24"
-                        placeholder="inherit"
-                        value={overrides[l.key]}
-                        onChange={(e) => setOverrides({ ...overrides, [l.key]: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={pct >= 100 ? 'h-full bg-destructive' : 'h-full bg-primary'}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-
-            <div className="space-y-3 border-t pt-4">
-              {FEATURE_LIMITS.map((f) => (
-                <div key={f.key} className="flex items-center justify-between gap-3">
-                  <div>
-                    <Label className="text-sm">{f.label}</Label>
-                    <p className="text-xs text-muted-foreground">
-                      {overrides[f.key] === undefined
-                        ? `Inheriting plan (${limits[f.key] ? 'on' : 'off'})`
-                        : 'Overridden for this agency'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={overrides[f.key] === undefined ? Boolean(limits[f.key]) : Boolean(overrides[f.key])}
-                      onCheckedChange={(v) => setOverrides({ ...overrides, [f.key]: v })}
-                    />
-                    {overrides[f.key] !== undefined && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setOverrides({ ...overrides, [f.key]: undefined })}
-                      >
-                        Reset
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <Button onClick={saveOverrides} disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save overrides
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <div>
+            <Label>Subscription status</Label>
+            <Select
+              value={form.subscriptionStatus}
+              onValueChange={(subscriptionStatus) => setForm({ ...form, subscriptionStatus })}
+            >
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="trialing">Trialing</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="past_due">Past due</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Wallet credits</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.walletCredits}
+              onChange={(e) => setForm({ ...form, walletCredits: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Internal notes</Label>
+            <Textarea
+              rows={3}
+              value={form.platformNotes}
+              onChange={(e) => setForm({ ...form, platformNotes: e.target.value })}
+              placeholder="Only visible to platform admins."
+            />
+          </div>
+          <Button onClick={saveProfile} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save changes
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

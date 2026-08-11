@@ -146,7 +146,7 @@ export default function PlatformDashboardPage() {
           {
             href: '/dashboard/platform/agencies',
             title: 'Agencies',
-            body: 'Create, suspend, change plans, set per-agency limit overrides, impersonate for support.',
+            body: 'Create, suspend, or impersonate an owner for support.',
             icon: Building2,
           },
           {
