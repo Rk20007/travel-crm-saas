@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatInr } from '@/utils/crm'
 import { toCompressedDataUrl } from '@/lib/imageCompress'
 
@@ -242,28 +243,30 @@ export default function FinancePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            className="flex h-9 rounded-md border border-border bg-transparent px-2 text-sm"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {MONTH_NAMES.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            className="flex h-9 rounded-md border border-border bg-transparent px-2 text-sm"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-          >
-            {Array.from({ length: 6 }, (_, i) => now.getFullYear() - 3 + i).map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+          <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+            <SelectTrigger className="h-9 w-[140px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_NAMES.map((m, i) => (
+                <SelectItem key={m} value={String(i + 1)}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="h-9 w-[100px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 6 }, (_, i) => now.getFullYear() - 3 + i).map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -559,17 +562,21 @@ export default function FinancePage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Category *</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 text-sm"
+              <Select
                 value={expenseForm.category}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))}
+                onValueChange={(v) => setExpenseForm((f) => ({ ...f, category: v }))}
               >
-                {EXPENSE_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Amount (₹) *</Label>
@@ -617,18 +624,24 @@ export default function FinancePage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Employee *</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 text-sm"
-                value={salaryForm.userId}
-                onChange={(e) => setSalaryForm((f) => ({ ...f, userId: e.target.value }))}
+              <Select
+                value={salaryForm.userId || 'unassigned'}
+                onValueChange={(v) =>
+                  setSalaryForm((f) => ({ ...f, userId: v === 'unassigned' ? '' : v }))
+                }
               >
-                <option value="">Select employee</option>
-                {employees.map((emp) => (
-                  <option key={emp._id} value={emp._id}>
-                    {emp.name} ({emp.role})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Select employee</SelectItem>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp._id} value={emp._id}>
+                      {emp.name} ({emp.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Amount (₹) *</Label>

@@ -527,15 +527,19 @@ function InvoicesPageInner() {
             </div>
             <div className="space-y-2">
               <Label>Invoice type *</Label>
-              <select
-                className="flex h-9 w-full rounded-md border-2 border-gray-400 bg-transparent px-3 text-sm dark:border-gray-500"
+              <Select
                 value={form.invoiceType}
-                onChange={(e) => setForm((f) => ({ ...f, invoiceType: e.target.value }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, invoiceType: v }))}
               >
-                <option value="proforma">Partial Invoice</option>
-                <option value="advance">Advance Invoice</option>
-                <option value="tax_invoice">Final Invoice</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="proforma">Partial Invoice</SelectItem>
+                  <SelectItem value="advance">Advance Invoice</SelectItem>
+                  <SelectItem value="tax_invoice">Final Invoice</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {['advance', 'proforma'].includes(form.invoiceType) ? (
               <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -593,18 +597,22 @@ function InvoicesPageInner() {
                 <Label>Due date *</Label>
                 {dayPlanDates.length > 0 ? (
                   <>
-                    <select
-                      className="flex h-9 w-full rounded-md border-2 border-gray-400 bg-transparent px-3 text-sm dark:border-gray-500"
-                      value={form.dueDate}
-                      onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                    <Select
+                      value={form.dueDate || 'none'}
+                      onValueChange={(v) => setForm((f) => ({ ...f, dueDate: v === 'none' ? '' : v }))}
                     >
-                      <option value="">Select a date from the day plan</option>
-                      {dayPlanDates.map((d) => (
-                        <option key={d.value} value={d.value}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Select a date from the day plan</SelectItem>
+                        {dayPlanDates.map((d) => (
+                          <SelectItem key={d.value} value={String(d.value)}>
+                            {d.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-muted-foreground">
                       Dates come from this booking's itinerary day plan.
                     </p>

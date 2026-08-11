@@ -10,6 +10,13 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { leadDisplayName, formatInr } from '@/utils/crm'
@@ -647,15 +654,19 @@ export default function InvoiceClientLedgerPage() {
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             <div className="space-y-2">
               <Label>Invoice type *</Label>
-              <select
-                className="flex h-9 w-full rounded-md border-2 border-gray-400 bg-transparent px-3 text-sm dark:border-gray-500"
+              <Select
                 value={invoiceForm.invoiceType}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, invoiceType: e.target.value }))}
+                onValueChange={(v) => setInvoiceForm((f) => ({ ...f, invoiceType: v }))}
               >
-                <option value="proforma">Partial Invoice</option>
-                <option value="advance">Advance Invoice</option>
-                <option value="tax_invoice">Final Invoice</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="proforma">Partial Invoice</SelectItem>
+                  <SelectItem value="advance">Advance Invoice</SelectItem>
+                  <SelectItem value="tax_invoice">Final Invoice</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {['advance', 'proforma'].includes(invoiceForm.invoiceType) ? (
               <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -742,15 +753,19 @@ export default function InvoiceClientLedgerPage() {
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             <div className="space-y-2">
               <Label>Invoice type</Label>
-              <select
-                className="flex h-9 w-full rounded-md border-2 border-gray-400 bg-transparent px-3 text-sm dark:border-gray-500"
+              <Select
                 value={editForm.invoiceType}
-                onChange={(e) => setEditForm((f) => ({ ...f, invoiceType: e.target.value }))}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, invoiceType: v }))}
               >
-                <option value="proforma">Partial Invoice</option>
-                <option value="advance">Advance Invoice</option>
-                <option value="tax_invoice">Final Invoice</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="proforma">Partial Invoice</SelectItem>
+                  <SelectItem value="advance">Advance Invoice</SelectItem>
+                  <SelectItem value="tax_invoice">Final Invoice</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Amount (₹) *</Label>

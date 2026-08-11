@@ -722,19 +722,25 @@ export default function LeadsPage() {
                     <td className="p-4">{labelize(lead.source)}</td>
                     {canAssign && (
                       <td className="p-4">
-                        <select
-                          value={lead.assignedTo?._id || ''}
-                          onChange={(e) => handleAssign(lead._id, e.target.value)}
-                          className="max-w-40 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                          title="Assign lead to a sales member"
+                        <Select
+                          value={lead.assignedTo?._id || 'unassigned'}
+                          onValueChange={(v) => handleAssign(lead._id, v === 'unassigned' ? '' : v)}
                         >
-                          <option value="">Unassigned</option>
-                          {membersForLead(lead).map((m) => (
-                            <option key={m._id} value={m._id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger
+                            className="h-8 max-w-40 border border-border text-sm"
+                            aria-label="Assign lead to a sales member"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {membersForLead(lead).map((m) => (
+                              <SelectItem key={m._id} value={m._id}>
+                                {m.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                     )}
                     <td className="p-4">
@@ -873,25 +879,26 @@ export default function LeadsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background"
-                >
-                  {statusOptions
-                    .filter((s) => {
-                      if (s.key === formData.status) return true // always keep current
-                      if (s.key === 'completed') return false // set later by Operations
-                      // "Booked" only for existing leads — it opens the Book dialog.
-                      if (s.key === 'booked') return !!editingId
-                      return true
-                    })
-                    .map((status) => (
-                      <option key={status.key} value={status.key}>
-                        {status.label}
-                      </option>
-                    ))}
-                </select>
+                <Select value={formData.status} onValueChange={(v) => handleStatusChange(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions
+                      .filter((s) => {
+                        if (s.key === formData.status) return true // always keep current
+                        if (s.key === 'completed') return false // set later by Operations
+                        // "Booked" only for existing leads — it opens the Book dialog.
+                        if (s.key === 'booked') return !!editingId
+                        return true
+                      })
+                      .map((status) => (
+                        <SelectItem key={status.key} value={status.key}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Choosing <span className="font-medium">Booked</span> opens the booking form
                   (trip dates &amp; amount).
@@ -905,18 +912,24 @@ export default function LeadsPage() {
 
                   <div>
                     <label className="mb-1 block text-sm font-medium">Lost reason</label>
-                    <select
-                      value={formData.lostReason}
-                      onChange={(e) => setFormData({ ...formData, lostReason: e.target.value })}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2"
+                    <Select
+                      value={formData.lostReason || 'none'}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, lostReason: v === 'none' ? '' : v })
+                      }
                     >
-                      <option value="">Select reason</option>
-                      {lostReasons.map((r) => (
-                        <option key={r.key} value={r.key}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Select reason</SelectItem>
+                        {lostReasons.map((r) => (
+                          <SelectItem key={r.key} value={r.key}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
@@ -934,17 +947,21 @@ export default function LeadsPage() {
 
                   <div>
                     <label className="mb-1 block text-sm font-medium">Follow-up type</label>
-                    <select
+                    <Select
                       value={formData.followUpType}
-                      onChange={(e) => setFormData({ ...formData, followUpType: e.target.value })}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2"
+                      onValueChange={(v) => setFormData({ ...formData, followUpType: v })}
                     >
-                      {followUpTypes.map((t) => (
-                        <option key={t.key} value={t.key}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {followUpTypes.map((t) => (
+                          <SelectItem key={t.key} value={t.key}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Remarks are taken from the “Remarks / Conversation notes” field above.
@@ -954,17 +971,21 @@ export default function LeadsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">Source</label>
-                <select
+                <Select
                   value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background"
+                  onValueChange={(v) => setFormData({ ...formData, source: v })}
                 >
-                  {sourceOptions.map((source) => (
-                    <option key={source.key} value={source.key}>
-                      {source.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sourceOptions.map((source) => (
+                      <SelectItem key={source.key} value={source.key}>
+                        {source.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex gap-2 justify-end pt-4">
@@ -998,21 +1019,26 @@ export default function LeadsPage() {
                     No itineraries created for this lead yet — create one before booking.
                   </p>
                 ) : (
-                  <select
-                    value={bookForm.itineraryId}
-                    onChange={(e) => setBookForm({ ...bookForm, itineraryId: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2"
-                    required
+                  <Select
+                    value={bookForm.itineraryId || 'none'}
+                    onValueChange={(v) =>
+                      setBookForm({ ...bookForm, itineraryId: v === 'none' ? '' : v })
+                    }
                   >
-                    <option value="">Select the itinerary the client booked on</option>
-                    {leadItineraries.map((it) => (
-                      <option key={it._id} value={it._id}>
-                        {leadDisplayName(bookLead)}
-                        {it.destination ? ` · ${it.destination}` : ''}
-                        {it.totalPrice || it.totalCost ? ` · ₹${it.totalPrice || it.totalCost}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Select the itinerary the client booked on</SelectItem>
+                      {leadItineraries.map((it) => (
+                        <SelectItem key={it._id} value={it._id}>
+                          {leadDisplayName(bookLead)}
+                          {it.destination ? ` · ${it.destination}` : ''}
+                          {it.totalPrice || it.totalCost ? ` · ₹${it.totalPrice || it.totalCost}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
                   Trip dates, travelers, and amount are all taken from this itinerary.
@@ -1068,33 +1094,45 @@ export default function LeadsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Operations</label>
-                  <select
-                    value={bookForm.opsAssignedTo}
-                    onChange={(e) => setBookForm({ ...bookForm, opsAssignedTo: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  <Select
+                    value={bookForm.opsAssignedTo || 'unassigned'}
+                    onValueChange={(v) =>
+                      setBookForm({ ...bookForm, opsAssignedTo: v === 'unassigned' ? '' : v })
+                    }
                   >
-                    <option value="">Auto-assign (round robin)</option>
-                    {opsMembers.map((m) => (
-                      <option key={m._id} value={m._id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Auto-assign (round robin)</SelectItem>
+                      {opsMembers.map((m) => (
+                        <SelectItem key={m._id} value={m._id}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Accounts</label>
-                  <select
-                    value={bookForm.accountsAssignedTo}
-                    onChange={(e) => setBookForm({ ...bookForm, accountsAssignedTo: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  <Select
+                    value={bookForm.accountsAssignedTo || 'unassigned'}
+                    onValueChange={(v) =>
+                      setBookForm({ ...bookForm, accountsAssignedTo: v === 'unassigned' ? '' : v })
+                    }
                   >
-                    <option value="">Auto-assign (round robin)</option>
-                    {accountsMembers.map((m) => (
-                      <option key={m._id} value={m._id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Auto-assign (round robin)</SelectItem>
+                      {accountsMembers.map((m) => (
+                        <SelectItem key={m._id} value={m._id}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">

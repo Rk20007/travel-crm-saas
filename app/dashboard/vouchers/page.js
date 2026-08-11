@@ -612,33 +612,41 @@ function VouchersPageContent() {
                             <div className="ml-6 grid grid-cols-2 gap-2">
                               <div>
                                 <Label className="text-xs">Check-in</Label>
-                                <select
-                                  className="w-36 rounded-md border border-gray-400 bg-background px-2 py-1 text-xs dark:border-gray-500"
-                                  value={hotelDates[id]?.checkIn || ''}
-                                  onChange={(e) => setHotelDate(id, 'checkIn', e.target.value)}
+                                <Select
+                                  value={hotelDates[id]?.checkIn || 'none'}
+                                  onValueChange={(v) => setHotelDate(id, 'checkIn', v === 'none' ? '' : v)}
                                 >
-                                  <option value="">Select date</option>
-                                  {dayPlanDates.map((d) => (
-                                    <option key={d.value} value={d.value}>
-                                      {d.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                  <SelectTrigger className="h-8 w-36 text-xs">
+                                    <SelectValue placeholder="Select date" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Select date</SelectItem>
+                                    {dayPlanDates.map((d) => (
+                                      <SelectItem key={d.value} value={d.value}>
+                                        {d.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div>
                                 <Label className="text-xs">Check-out</Label>
-                                <select
-                                  className="w-36 rounded-md border border-gray-400 bg-background px-2 py-1 text-xs dark:border-gray-500"
-                                  value={hotelDates[id]?.checkOut || ''}
-                                  onChange={(e) => setHotelDate(id, 'checkOut', e.target.value)}
+                                <Select
+                                  value={hotelDates[id]?.checkOut || 'none'}
+                                  onValueChange={(v) => setHotelDate(id, 'checkOut', v === 'none' ? '' : v)}
                                 >
-                                  <option value="">Select date</option>
-                                  {dayPlanDates.map((d) => (
-                                    <option key={d.value} value={d.value}>
-                                      {d.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                  <SelectTrigger className="h-8 w-36 text-xs">
+                                    <SelectValue placeholder="Select date" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Select date</SelectItem>
+                                    {dayPlanDates.map((d) => (
+                                      <SelectItem key={d.value} value={d.value}>
+                                        {d.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
                           )}

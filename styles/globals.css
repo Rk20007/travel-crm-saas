@@ -143,4 +143,18 @@
     transition: background-color 9999s ease-in-out 0s;
     box-shadow: 0 0 0 1000px var(--card) inset;
   }
+
+  /* Native <select> dropdowns (month/year pickers, table filters, etc.) render
+     their closed box from our own bg-transparent class, but the open option
+     list is drawn by the browser itself and defaults to white — the app's
+     dark theme never reaches it unless every <option> is themed explicitly. */
+  select {
+    background-color: var(--card);
+    color: var(--foreground);
+    color-scheme: dark;
+  }
+  select option {
+    background-color: var(--card);
+    color: var(--foreground);
+  }
 }
