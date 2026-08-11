@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { enablePushNotifications, getPushPermission, pushSupported } from '@/lib/push-client'
 
-const POLL_MS = 10_000
+const POLL_MS = 30_000
 
 /** Two-tone "ding" generated with the Web Audio API — no audio file to ship. */
 function playChime() {
@@ -123,10 +123,37 @@ export function NotificationBell() {
     } catch {}
   }, [router])
 
+  // Polling a hidden tab buys nothing — the toast and chime would fire at a
+  // window nobody is looking at, and browsers throttle the timer anyway. Stop
+  // while hidden, then catch up immediately on return.
   useEffect(() => {
+    const start = () => {
+      if (pollRef.current) return
+      pollRef.current = setInterval(load, POLL_MS)
+    }
+    const stop = () => {
+      if (!pollRef.current) return
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        load()
+        start()
+      } else {
+        stop()
+      }
+    }
+
     load()
-    pollRef.current = setInterval(load, POLL_MS)
-    return () => clearInterval(pollRef.current)
+    if (document.visibilityState === 'visible') start()
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [load])
 
   const handleClick = (n) => {

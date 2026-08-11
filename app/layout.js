@@ -36,9 +36,14 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }) {
+  // data-scroll-behavior tells Next the smooth scrolling in globals.css is
+  // intentional, so it stops animating (and warning about) every route change.
+  // suppressHydrationWarning covers attributes browser extensions inject into
+  // <body> before React hydrates — those mismatches were tripping Fast Refresh
+  // into full page reloads in dev.
   return (
-    <html lang="en" className="bg-background">
-      <body className={`${geist.className} font-sans antialiased`}>
+    <html lang="en" className="bg-background" data-scroll-behavior="smooth">
+      <body className={`${geist.className} font-sans antialiased`} suppressHydrationWarning>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

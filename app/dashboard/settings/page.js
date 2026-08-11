@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,13 +9,6 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/crm/PageHeader'
 import { MASTER_GROUPS, categoriesByGroup } from '@/lib/masterCategories'
 import { MasterTable } from '@/components/settings/MasterTable'
-import { HotelManager } from '@/components/settings/HotelManager'
-import { ActivityManager } from '@/components/settings/ActivityManager'
-import { VehicleManager } from '@/components/settings/VehicleManager'
-import { DayPlanTemplateManager } from '@/components/settings/DayPlanTemplateManager'
-import { AuditLogViewer } from '@/components/settings/AuditLogViewer'
-import { CompanyProfile } from '@/components/settings/CompanyProfile'
-import { GalleryManager } from '@/components/settings/GalleryManager'
 import {
   Search,
   Building2,
@@ -30,6 +24,42 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+/**
+ * Only one panel is ever on screen, but eagerly importing all of them made the
+ * settings route pull ~2.8k lines of manager UI (HotelManager alone is ~1k)
+ * before it could paint. Loading each on demand keeps the first render to the
+ * nav plus whichever panel was actually opened.
+ */
+const panel = (loader) => dynamic(loader, {
+  loading: () => (
+    <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+      Loading…
+    </div>
+  ),
+})
+
+const HotelManager = panel(() =>
+  import('@/components/settings/HotelManager').then((m) => m.HotelManager)
+)
+const ActivityManager = panel(() =>
+  import('@/components/settings/ActivityManager').then((m) => m.ActivityManager)
+)
+const VehicleManager = panel(() =>
+  import('@/components/settings/VehicleManager').then((m) => m.VehicleManager)
+)
+const DayPlanTemplateManager = panel(() =>
+  import('@/components/settings/DayPlanTemplateManager').then((m) => m.DayPlanTemplateManager)
+)
+const AuditLogViewer = panel(() =>
+  import('@/components/settings/AuditLogViewer').then((m) => m.AuditLogViewer)
+)
+const CompanyProfile = panel(() =>
+  import('@/components/settings/CompanyProfile').then((m) => m.CompanyProfile)
+)
+const GalleryManager = panel(() =>
+  import('@/components/settings/GalleryManager').then((m) => m.GalleryManager)
+)
 
 export default function SettingsPage() {
   const router = useRouter()

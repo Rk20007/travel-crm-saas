@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { scheduleSilentRefresh } from '@/lib/auth-client'
+import { scheduleSilentRefresh, installAuthFetch, getValidToken } from '@/lib/auth-client'
 import { getNavItems, ROLE_LABELS, getDashboardRoute, canAccessLeads } from '@/lib/permissions-client'
 import { Toaster } from '@/components/ui/sonner'
 import { ImpersonationBanner } from '@/components/crm/ImpersonationBanner'
@@ -131,15 +131,24 @@ export default function DashboardLayout({ children }) {
     }
     setLoading(false)
 
-    const stopRefresh = scheduleSilentRefresh(12 * 60 * 1000)
-    return () => stopRefresh()
+    // Installed before anything fetches so the page's very first requests are
+    // already covered by pre-expiry refresh and 401-retry. Without this a tab
+    // reopened after the 15m access token lapsed would fire a burst of
+    // requests that all fail with "Invalid or expired token".
+    const stopIntercept = installAuthFetch()
+    const stopRefresh = scheduleSilentRefresh()
+    return () => {
+      stopRefresh()
+      stopIntercept()
+    }
   }, [router])
 
   useEffect(() => {
     async function loadBrands() {
-      const token = localStorage.getItem('token')
       const u = user
-      if (!token || !u) return
+      if (!u) return
+      const token = await getValidToken()
+      if (!token) return
       try {
         const res = await fetch('/api/brands', { headers: { Authorization: `Bearer ${token}` } })
         const data = await res.json()
@@ -203,7 +212,7 @@ export default function DashboardLayout({ children }) {
 
   const onBrandChange = async (val) => {
     setBrandValue(val)
-    const token = localStorage.getItem('token')
+    const token = await getValidToken()
     if (!token) return
     const body = val === 'all' ? { brandId: null } : { brandId: val }
     const res = await fetch('/api/brands/active', {
