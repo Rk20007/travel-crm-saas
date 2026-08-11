@@ -69,11 +69,18 @@ export default function LeadsPage() {
     lostReason: '',
     nextFollowUpAt: '',
     followUpType: 'call',
+    followUpDate: '',
   })
 
   const { options: statusOptions } = useMasters('lead_status', [
     'new', 'contacted', 'interested', 'negotiating', 'booked', 'completed', 'lost',
   ])
+  // Owner can flag any (non-locked) status in Settings → Lead Statuses as
+  // "Requires follow-up" — Lost keeps its own richer reason/type block below,
+  // this covers every other flagged status with just a date.
+  const selectedStatusOption = statusOptions.find((s) => s.key === formData.status)
+  const needsGenericFollowUp =
+    formData.status !== 'lost' && !!selectedStatusOption?.metadata?.requiresFollowUp
   const { options: sourceOptions } = useMasters('lead_source', [
     'direct', 'facebook_ads', 'instagram', 'website', 'referral', 'social', 'other',
   ])
@@ -213,6 +220,7 @@ export default function LeadsPage() {
       lostReason: '',
       nextFollowUpAt: '',
       followUpType: 'call',
+      followUpDate: '',
     })
     setShowModal(true)
   }
@@ -235,6 +243,7 @@ export default function LeadsPage() {
         ? new Date(lead.lostDetails.nextFollowUpAt).toISOString().slice(0, 16)
         : '',
       followUpType: lead.lostDetails?.followUpType || 'call',
+      followUpDate: '',
     })
     setShowModal(true)
   }
@@ -286,6 +295,23 @@ export default function LeadsPage() {
             type: formData.followUpType,
             scheduledDate: formData.nextFollowUpAt,
             description: formData.notes || `Lost lead follow-up (${formData.lostReason || 'no reason'})`,
+          }),
+        }).catch(() => {})
+      }
+      // Any other status the owner flagged "Requires follow-up" (Settings →
+      // Lead Statuses) works the same way, just with a plain date instead of
+      // Lost's reason/type fields.
+      if (needsGenericFollowUp && formData.followUpDate && newLead?._id) {
+        const u = JSON.parse(localStorage.getItem('user') || '{}')
+        await fetch('/api/follow-ups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            leadId: newLead._id,
+            assignedTo: u.id || u.userId || u._id || newLead.assignedTo?._id || newLead.assignedTo,
+            type: 'call',
+            scheduledDate: formData.followUpDate,
+            description: formData.notes || `Follow-up for ${selectedStatusOption?.label || formData.status}`,
           }),
         }).catch(() => {})
       }
@@ -965,6 +991,24 @@ export default function LeadsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Remarks are taken from the “Remarks / Conversation notes” field above.
+                  </p>
+                </div>
+              )}
+
+              {/* Generic follow-up date — appears for any status the owner
+                  flagged "Requires follow-up" in Settings → Lead Statuses. */}
+              {needsGenericFollowUp && (
+                <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <label className="block text-sm font-medium">
+                    Follow-up date <span className="text-muted-foreground font-normal">— required for “{selectedStatusOption?.label}”</span>
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    value={formData.followUpDate}
+                    onChange={(e) => setFormData({ ...formData, followUpDate: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Adds a follow-up on this date under Follow-ups.
                   </p>
                 </div>
               )}

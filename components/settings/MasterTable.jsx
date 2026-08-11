@@ -40,10 +40,17 @@ export function MasterTable({ category }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ label: '', color: '#64748b', icon: '', description: '' })
+  const [form, setForm] = useState({
+    label: '',
+    color: '#64748b',
+    icon: '',
+    description: '',
+    requiresFollowUp: false,
+  })
 
   const supportsColor = category?.supportsColor
   const supportsIcon = category?.supportsIcon
+  const supportsFollowUp = category?.supportsFollowUp
 
   const load = async () => {
     if (!category) return
@@ -77,7 +84,7 @@ export function MasterTable({ category }) {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ label: '', color: '#64748b', icon: '', description: '' })
+    setForm({ label: '', color: '#64748b', icon: '', description: '', requiresFollowUp: false })
     setDialogOpen(true)
   }
 
@@ -88,6 +95,7 @@ export function MasterTable({ category }) {
       color: o.color || '#64748b',
       icon: o.icon || '',
       description: o.description || '',
+      requiresFollowUp: !!o.metadata?.requiresFollowUp,
     })
     setDialogOpen(true)
   }
@@ -103,9 +111,16 @@ export function MasterTable({ category }) {
         ? `/api/settings/masters/${editing._id}`
         : '/api/settings/masters'
       const method = editing ? 'PUT' : 'POST'
+      const metadata = supportsFollowUp ? { requiresFollowUp: !!form.requiresFollowUp } : undefined
       const body = editing
-        ? { label: form.label, color: form.color, icon: form.icon, description: form.description }
-        : { category: category.key, ...form }
+        ? {
+            label: form.label,
+            color: form.color,
+            icon: form.icon,
+            description: form.description,
+            ...(metadata ? { metadata } : {}),
+          }
+        : { category: category.key, ...form, ...(metadata ? { metadata } : {}) }
       const res = await fetch(url, {
         method,
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
@@ -255,6 +270,9 @@ export function MasterTable({ category }) {
                       <Lock className="h-3 w-3 text-muted-foreground" title="System default" />
                     ) : null}
                     {o.isArchived && <Badge variant="outline">Archived</Badge>}
+                    {supportsFollowUp && o.metadata?.requiresFollowUp && (
+                      <Badge variant="outline" className="text-xs">Follow-up</Badge>
+                    )}
                   </div>
                   {o.description && (
                     <p className="truncate text-xs text-muted-foreground">{o.description}</p>
@@ -363,6 +381,20 @@ export function MasterTable({ category }) {
                   value={form.icon}
                   onChange={(e) => setForm({ ...form, icon: e.target.value })}
                   placeholder="e.g. phone"
+                />
+              </div>
+            )}
+            {supportsFollowUp && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div>
+                  <Label className="text-sm">Requires follow-up</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When a lead is set to this status, ask for a follow-up date and schedule it.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.requiresFollowUp}
+                  onCheckedChange={(v) => setForm({ ...form, requiresFollowUp: v })}
                 />
               </div>
             )}
