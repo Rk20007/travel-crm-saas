@@ -235,7 +235,10 @@ function HomeContent() {
                 Sign In
               </Button>
             </Link>
-            <Button className="gap-1.5" onClick={() => setDemoOpen(true)}>
+            <Button
+              className="gap-1.5 bg-[#C0FF00] text-black hover:bg-[#a8e000]"
+              onClick={() => setDemoOpen(true)}
+            >
               Book a Demo <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -253,22 +256,22 @@ function HomeContent() {
           </div>
           <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold tracking-tight sm:text-6xl">
             Run your entire travel business from{' '}
-            <span className="text-gradient">one beautiful workspace</span>
+            <span className="text-[#C0FF00]">one beautiful workspace</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground">
             Leads, itineraries, bookings, payments, and owner-controlled master settings — everything
             your agency needs to sell more trips and delight more travelers.
           </p>
-          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-9 flex flex-row items-center justify-center gap-3">
             <Button
               size="lg"
-              className="w-full gap-2 text-base sm:w-auto"
+              className="flex-1 gap-2 bg-[#C0FF00] text-base text-black hover:bg-[#a8e000] sm:flex-none"
               onClick={() => setDemoOpen(true)}
             >
               Book a Demo <ArrowRight className="h-4 w-4" />
             </Button>
-            <a href="#features" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="w-full text-base sm:w-auto">
+            <a href="#features" className="flex-1 sm:flex-none">
+              <Button variant="outline" size="lg" className="w-full text-base">
                 Explore Features
               </Button>
             </a>
@@ -367,7 +370,7 @@ function HomeContent() {
             <Button
               variant="secondary"
               size="lg"
-              className="mt-8 gap-2"
+              className="mt-8 gap-2 bg-[#C0FF00] text-black hover:bg-[#a8e000]"
               onClick={() => setDemoOpen(true)}
             >
               Book a Demo <ArrowRight className="h-4 w-4" />
