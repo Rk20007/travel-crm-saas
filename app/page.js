@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { SITE_URL, SITE_NAME, DEFAULT_DESCRIPTION } from '@/lib/seo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -221,8 +222,37 @@ function HomeContent() {
     { icon: BarChart3, title: 'Close & grow', text: 'Convert to bookings, collect payments, and track revenue.' },
   ]
 
+  const jsonLd = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo1.png`,
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: SITE_NAME,
+      description: DEFAULT_DESCRIPTION,
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      url: SITE_URL,
+    },
+  ]
+
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -235,10 +265,7 @@ function HomeContent() {
                 Sign In
               </Button>
             </Link>
-            <Button
-              className="gap-1.5 bg-[#C0FF00] text-black hover:bg-[#a8e000]"
-              onClick={() => setDemoOpen(true)}
-            >
+            <Button className="gap-1.5" onClick={() => setDemoOpen(true)}>
               Book a Demo <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
