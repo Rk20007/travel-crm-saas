@@ -255,18 +255,29 @@ function HomeContent() {
       />
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <Image src="/logo1.png" alt="Travel SaaS CRM" width={162} height={40} className="h-10 w-auto object-contain" priority />
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 shrink items-center gap-2">
+            <Image
+              src="/logo1.png"
+              alt="Travel SaaS CRM"
+              width={162}
+              height={40}
+              className="h-7 w-auto shrink-0 object-contain sm:h-10"
+              priority
+            />
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
             <Link href="/login">
-              <Button variant="ghost" className="hidden sm:inline-flex">
+              <Button variant="ghost" size="sm" className="px-2 text-xs sm:h-9 sm:px-4 sm:text-sm">
                 Sign In
               </Button>
             </Link>
-            <Button className="gap-1.5" onClick={() => setDemoOpen(true)}>
-              Book a Demo <ArrowRight className="h-4 w-4" />
+            <Button
+              size="sm"
+              className="gap-1 px-3 text-xs sm:h-9 sm:gap-1.5 sm:px-4 sm:text-sm"
+              onClick={() => setDemoOpen(true)}
+            >
+              Book a Demo <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
           </div>
         </div>
