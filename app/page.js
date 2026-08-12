@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,7 +21,6 @@ import {
   Users,
   Calendar,
   Zap,
-  Globe,
   BarChart3,
   ArrowRight,
   Plane,
@@ -227,10 +227,7 @@ function HomeContent() {
       <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <Globe className="h-5 w-5" />
-            </div>
-            <span className="text-lg font-bold tracking-tight">Travel SaaS CRM</span>
+            <Image src="/logo1.png" alt="Travel SaaS CRM" width={162} height={40} className="h-10 w-auto object-contain" priority />
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/login">
@@ -383,10 +380,7 @@ function HomeContent() {
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-10 sm:flex-row sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Globe className="h-4 w-4" />
-            </div>
-            <span className="font-semibold">Travel SaaS CRM</span>
+            <Image src="/logo1.png" alt="Travel SaaS CRM" width={130} height={32} className="h-8 w-auto object-contain" />
           </div>
           <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Travel SaaS CRM. All rights reserved.

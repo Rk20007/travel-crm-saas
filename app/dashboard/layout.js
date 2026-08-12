@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import {
   Menu,
@@ -252,10 +253,17 @@ export default function DashboardLayout({ children }) {
     <>
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Globe className="h-6 w-6 shrink-0 text-primary" />
+          <div className={`relative h-9 shrink-0 overflow-hidden ${showExpandedSidebar ? 'w-35' : 'w-9'}`}>
+            <Image
+              src="/logo1.png"
+              alt="Travel SaaS CRM"
+              fill
+              className={showExpandedSidebar ? 'object-contain object-left' : 'object-cover object-left'}
+              priority
+            />
+          </div>
           {showExpandedSidebar && (
             <div className="min-w-0">
-              <p className="truncate text-lg font-bold leading-tight text-white">Travel SaaS CRM</p>
               <p className="truncate text-xs capitalize text-white/60">
                 {ROLE_LABELS[user.role] || user.role}
               </p>
