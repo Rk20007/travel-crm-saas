@@ -175,8 +175,10 @@ function FollowUpsContent() {
 
   // Keep only one follow-up per lead: a still-pending one always wins (it's
   // the actionable one), regardless of whether a later-timestamped
-  // completed/cancelled entry exists for that same lead. Otherwise, the
-  // most recently scheduled entry represents the lead's history.
+  // completed/cancelled entry exists for that same lead. Otherwise, whichever
+  // was created/edited most recently represents the lead's current state —
+  // NOT whichever happens to have the furthest-out scheduled date (an older
+  // duplicate dated further out would otherwise bury a just-scheduled one).
   const latestPerLead = new Map()
   for (const fu of followUps) {
     const key = String(fu.leadId?._id || fu.leadId || '')
@@ -191,7 +193,7 @@ function FollowUpsContent() {
       if (fuPending) latestPerLead.set(key, fu)
       continue
     }
-    if (new Date(fu.scheduledDate) > new Date(existing.scheduledDate)) {
+    if (new Date(fu.createdAt) > new Date(existing.createdAt)) {
       latestPerLead.set(key, fu)
     }
   }

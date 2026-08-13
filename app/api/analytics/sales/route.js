@@ -58,7 +58,7 @@ export async function GET(request) {
         // the Follow-ups page uses, so this never double-counts a lead that
         // ended up with more than one pending follow-up record.
         FollowUp.find({ teamId: tid, assignedTo: uid, status: 'pending' })
-          .select('leadId scheduledDate')
+          .select('leadId scheduledDate createdAt')
           .lean(),
         // This sales person's own bookings, optionally scoped to the range —
         // deduped by itinerary below (a double-submit on "Confirm booking"
@@ -75,13 +75,17 @@ export async function GET(request) {
         Lead.countDocuments({ ...base, status: 'new' }),
       ])
 
-    // One pending follow-up per lead — the latest-scheduled one wins,
-    // matching the Follow-ups page's own dedup rule.
+    // One pending follow-up per lead — whichever was created/edited most
+    // recently wins (that's the one representing the sales person's current
+    // intent), not whichever happens to have the furthest-out date. POST
+    // /api/follow-ups now cancels a lead's older pending entries when a new
+    // one is scheduled, so this is mostly a safety net for any that predate
+    // that fix.
     const latestPendingPerLead = new Map()
     for (const fu of pendingFollowUpDocs) {
       const key = String(fu.leadId)
       const existing = latestPendingPerLead.get(key)
-      if (!existing || new Date(fu.scheduledDate) > new Date(existing.scheduledDate)) {
+      if (!existing || new Date(fu.createdAt) > new Date(existing.createdAt)) {
         latestPendingPerLead.set(key, fu)
       }
     }

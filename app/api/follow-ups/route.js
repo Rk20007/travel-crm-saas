@@ -93,6 +93,18 @@ export async function POST(request) {
       return Response.json({ error: 'Lead not found' }, { status: 404 })
     }
 
+    // A lead should only ever have one *actionable* follow-up at a time —
+    // every place that creates one here (lead edit, lost-lead follow-up,
+    // status-change follow-up, this page) was leaving the previous pending
+    // record untouched, so they piled up indefinitely. Whichever one has the
+    // furthest-out date would then "win" in dedup'd views, silently burying
+    // whatever the user just scheduled. Superseding old pending ones here —
+    // once, centrally — fixes it for every caller at the source.
+    await FollowUp.updateMany(
+      { leadId, status: 'pending' },
+      { status: 'cancelled' }
+    )
+
     const followUp = await FollowUp.create({
       leadId,
       assignedTo,
