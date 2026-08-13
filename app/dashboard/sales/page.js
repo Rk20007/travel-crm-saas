@@ -129,14 +129,14 @@ export default function SalesDashboardPage() {
             label: 'Pending Follow-Ups',
             value: today.pendingFollowUps,
             icon: Bell,
-            href: '/dashboard/follow-ups',
+            href: '/dashboard/follow-ups?filter=pending',
             alert: 'info',
           },
           {
             label: "Today's Follow-Ups",
             value: today.todayFollowUps,
             icon: CalendarClock,
-            href: '/dashboard/follow-ups',
+            href: '/dashboard/follow-ups?filter=today',
           },
           { label: 'Bookings Closed', value: today.bookingsClosed, icon: Calendar, href: '/dashboard/sales/bookings' },
         ].map((s) => {

@@ -670,12 +670,18 @@ export default function LeadsPage() {
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => openItineraries(lead)}>
                     Itineraries
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditClick(lead)}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => openRemarks(lead)} title="Remarks">
-                    <MessageSquare className="h-4 w-4 text-success" />
-                  </Button>
+                  {/* Once booked, the lead moves to Operations — Sales can no
+                   * longer edit its details or add remarks here. */}
+                  {(lead.status !== 'booked' || isOwner) && (
+                    <>
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditClick(lead)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => openRemarks(lead)} title="Remarks">
+                        <MessageSquare className="h-4 w-4 text-success" />
+                      </Button>
+                    </>
+                  )}
                 </div>
                 <div className="mt-2 flex gap-2">
                   {lead.phone && (
@@ -782,20 +788,26 @@ export default function LeadsPage() {
                         >
                           <Eye className="h-4 w-4 text-primary" />
                         </button>
-                        <button
-                          onClick={() => openRemarks(lead)}
-                          className="p-2 hover:bg-secondary rounded-lg"
-                          title="Remarks / conversation log"
-                        >
-                          <MessageSquare className="h-4 w-4 text-success" />
-                        </button>
-                        <button
-                          onClick={() => handleEditClick(lead)}
-                          className="p-2 hover:bg-secondary rounded-lg"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4 text-blue-500" />
-                        </button>
+                        {/* Once booked, the lead moves to Operations — Sales
+                         * can no longer edit its details or add remarks here. */}
+                        {(lead.status !== 'booked' || isOwner) && (
+                          <>
+                            <button
+                              onClick={() => openRemarks(lead)}
+                              className="p-2 hover:bg-secondary rounded-lg"
+                              title="Remarks / conversation log"
+                            >
+                              <MessageSquare className="h-4 w-4 text-success" />
+                            </button>
+                            <button
+                              onClick={() => handleEditClick(lead)}
+                              className="p-2 hover:bg-secondary rounded-lg"
+                              title="Edit"
+                            >
+                              <Edit2 className="h-4 w-4 text-blue-500" />
+                            </button>
+                          </>
+                        )}
                         {lead.phone && (
                           <a
                             href={`tel:${lead.phone}`}

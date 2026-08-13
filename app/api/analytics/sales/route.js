@@ -51,34 +51,57 @@ export async function GET(request) {
     const todayEnd = new Date(todayStart)
     todayEnd.setUTCDate(todayEnd.getUTCDate() + 1)
 
-    const [newLeadsInRange, pendingFollowUps, todayFollowUps, bookingsClosed, notContacted] =
+    const [newLeadsInRange, pendingFollowUpDocs, bookingDocs, notContacted] =
       await Promise.all([
         Lead.countDocuments({ ...base, ...(inRange ? { createdAt: inRange } : {}) }),
-        // Overdue: still pending from a previous day (strictly before today,
-        // so it never overlaps with "today's follow-ups" below).
-        FollowUp.countDocuments({
-          teamId: tid,
-          assignedTo: uid,
-          status: 'pending',
-          scheduledDate: { $lt: todayStart },
-        }),
-        // Pending follow-ups scheduled for today.
-        FollowUp.countDocuments({
-          teamId: tid,
-          assignedTo: uid,
-          status: 'pending',
-          scheduledDate: { $gte: todayStart, $lt: todayEnd },
-        }),
-        // This sales person's own bookings, optionally scoped to the range.
-        Booking.countDocuments({
+        // All pending follow-ups — deduped to one per lead below, same rule
+        // the Follow-ups page uses, so this never double-counts a lead that
+        // ended up with more than one pending follow-up record.
+        FollowUp.find({ teamId: tid, assignedTo: uid, status: 'pending' })
+          .select('leadId scheduledDate')
+          .lean(),
+        // This sales person's own bookings, optionally scoped to the range —
+        // deduped by itinerary below (a double-submit on "Confirm booking"
+        // can otherwise leave two Booking records for the same itinerary).
+        Booking.find({
           teamId: tid,
           assignedTo: uid,
           ...(inRange ? { createdAt: inRange } : {}),
-        }),
+        })
+          .select('itineraryId')
+          .lean(),
         // Leads still sitting at 'new' — nobody's called them yet, since any
         // real contact would have moved the status forward.
         Lead.countDocuments({ ...base, status: 'new' }),
       ])
+
+    // One pending follow-up per lead — the latest-scheduled one wins,
+    // matching the Follow-ups page's own dedup rule.
+    const latestPendingPerLead = new Map()
+    for (const fu of pendingFollowUpDocs) {
+      const key = String(fu.leadId)
+      const existing = latestPendingPerLead.get(key)
+      if (!existing || new Date(fu.scheduledDate) > new Date(existing.scheduledDate)) {
+        latestPendingPerLead.set(key, fu)
+      }
+    }
+    let pendingFollowUps = 0
+    let todayFollowUps = 0
+    for (const fu of latestPendingPerLead.values()) {
+      const d = new Date(fu.scheduledDate)
+      if (d < todayStart) pendingFollowUps++
+      else if (d < todayEnd) todayFollowUps++
+    }
+
+    // One booking per itinerary.
+    const seenItineraries = new Set()
+    let bookingsClosed = 0
+    for (const b of bookingDocs) {
+      const key = String(b.itineraryId || b._id)
+      if (seenItineraries.has(key)) continue
+      seenItineraries.add(key)
+      bookingsClosed++
+    }
 
     const recentLeads = await Lead.find(base)
       .sort({ createdAt: -1 })
@@ -86,7 +109,7 @@ export async function GET(request) {
       .select('firstName lastName email phone status source destination travelDate createdAt')
       .lean()
 
-    const dueFollowUps = await FollowUp.find({
+    const dueFollowUpDocs = await FollowUp.find({
       teamId: tid,
       assignedTo: uid,
       status: 'pending',
@@ -94,8 +117,18 @@ export async function GET(request) {
     })
       .populate('leadId', 'firstName lastName phone')
       .sort({ scheduledDate: 1 })
-      .limit(5)
       .lean()
+    // Same one-per-lead rule for the "Due Follow-Ups" list shown below the
+    // cards — otherwise a lead with two pending records shows up twice.
+    const seenLeadsForDue = new Set()
+    const dueFollowUps = []
+    for (const fu of dueFollowUpDocs) {
+      const key = String(fu.leadId?._id || fu.leadId)
+      if (seenLeadsForDue.has(key)) continue
+      seenLeadsForDue.add(key)
+      dueFollowUps.push(fu)
+      if (dueFollowUps.length >= 5) break
+    }
 
     // Performance trend — bookings this sales person closed per month, for
     // the last 6 months (always this fixed window, independent of the

@@ -216,6 +216,25 @@ export async function POST(request) {
       }
     }
 
+    // Idempotency guard: a slow request + impatient double-click on "Confirm
+    // booking" (or a retried request) must never create two Booking records
+    // for the same itinerary — return the existing one instead of duplicating.
+    const existingBooking = await Booking.findOne({
+      itineraryId: itinerary._id,
+      teamId: authResult.user.teamId,
+    })
+      .populate('leadId', 'firstName lastName email phone')
+      .populate('itineraryId', 'tripName title destination totalPrice')
+      .populate('assignedTo', 'name email')
+      .populate('opsAssignedTo', 'name email')
+      .populate('accountsAssignedTo', 'name email')
+    if (existingBooking) {
+      return Response.json({
+        message: 'Booking already exists for this itinerary',
+        booking: existingBooking,
+      })
+    }
+
     // Generate unique booking number
     const bookingNumber = `BK-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
 

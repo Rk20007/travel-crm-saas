@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,9 +43,21 @@ function LeadStatusPill({ status, statusOptions }) {
 }
 
 export default function FollowUpsPage() {
+  return (
+    <Suspense fallback={null}>
+      <FollowUpsContent />
+    </Suspense>
+  )
+}
+
+function FollowUpsContent() {
+  const searchParams = useSearchParams()
+  const initialFilter = searchParams.get('filter')
   const [followUps, setFollowUps] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('today')
+  const [filter, setFilter] = useState(
+    ['today', 'all', 'pending'].includes(initialFilter) ? initialFilter : 'today'
+  )
   const [searchTerm, setSearchTerm] = useState('')
   const { options: statusOptions } = useMasters('lead_status', [
     'new', 'contacted', 'interested', 'negotiating', 'booked', 'completed', 'lost',
@@ -150,6 +163,16 @@ export default function FollowUpsPage() {
     )
   }
 
+  // Strictly before today — matches the "Pending Follow-Ups" count on the
+  // Sales dashboard, so a follow-up scheduled for later this week doesn't
+  // show up under Pending before its own day arrives.
+  const isPastDue = (date) => {
+    const d = new Date(date)
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    return d < startOfToday
+  }
+
   // Keep only one follow-up per lead: a still-pending one always wins (it's
   // the actionable one), regardless of whether a later-timestamped
   // completed/cancelled entry exists for that same lead. Otherwise, the
@@ -173,11 +196,14 @@ export default function FollowUpsPage() {
     }
   }
 
-  // "Today" and "Pending" are mutually exclusive: a pending follow-up
-  // scheduled for today only shows under Today, never under Pending too.
+  // "Today" and "Pending" are mutually exclusive: a pending follow-up only
+  // shows under Today while it's scheduled for today. The moment its date
+  // passes without being actioned, it drops out of Today and appears under
+  // Pending instead — future-dated follow-ups show under neither until
+  // their day arrives (they're visible under "All").
   const filteredFollowUps = [...latestPerLead.values()].filter((fu) => {
     if (filter === 'today' && (fu.status !== 'pending' || !isToday(fu.scheduledDate))) return false
-    if (filter === 'pending' && (fu.status !== 'pending' || isToday(fu.scheduledDate))) return false
+    if (filter === 'pending' && (fu.status !== 'pending' || !isPastDue(fu.scheduledDate))) return false
     const name = leadDisplayName(fu.leadId).toLowerCase()
     return name.includes(searchTerm.toLowerCase()) || fu.type?.toLowerCase().includes(searchTerm.toLowerCase())
   })

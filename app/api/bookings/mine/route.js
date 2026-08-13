@@ -27,7 +27,7 @@ export async function GET(request) {
     }
 
     await connectDB()
-    const bookings = await Booking.find({
+    const rawBookings = await Booking.find({
       teamId: authResult.user.teamId,
       assignedTo: authResult.user.userId,
     })
@@ -35,6 +35,20 @@ export async function GET(request) {
       .populate('itineraryId', 'nightStays hotels vehicles vehicle')
       .sort({ createdAt: -1 })
       .lean()
+
+    // Older double-submits could have created more than one Booking for the
+    // same itinerary (see the idempotency guard in POST /api/bookings) — keep
+    // only the most recent one per itinerary so Sales never sees the same
+    // closed client listed twice. Bookings without an itinerary (shouldn't
+    // normally happen) are kept as-is.
+    const seenItineraries = new Set()
+    const bookings = rawBookings.filter((b) => {
+      const key = String(b.itineraryId?._id || b.itineraryId || '')
+      if (!key) return true
+      if (seenItineraries.has(key)) return false
+      seenItineraries.add(key)
+      return true
+    })
 
     const bookingIds = bookings.map((b) => b._id)
     const sentVouchers = await Voucher.find({

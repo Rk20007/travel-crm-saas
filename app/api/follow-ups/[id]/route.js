@@ -1,6 +1,7 @@
 import connectDB from '@/lib/mongodb'
 import FollowUp from '@/models/FollowUp'
 import Lead from '@/models/Lead'
+import LeadTimeline from '@/models/LeadTimeline'
 import { authenticate } from '@/lib/middleware'
 import mongoose from 'mongoose'
 
@@ -36,6 +37,21 @@ export async function PATCH(request, { params }) {
 
     if (!followUp) {
       return Response.json({ error: 'Follow-up not found' }, { status: 404 })
+    }
+
+    // A remark entered here (Sales actioning a follow-up) should be visible
+    // in the lead's Activity Timeline alongside notes and status changes —
+    // otherwise remark history only ever lived on the Follow-ups list.
+    if (body.description !== undefined && body.description.trim()) {
+      await LeadTimeline.create({
+        leadId: followUp.leadId?._id || followUp.leadId,
+        teamId: followUp.teamId,
+        type: 'follow_up',
+        title: body.status === 'completed' ? 'Follow-up completed' : 'Follow-up remark',
+        body: body.description.trim(),
+        metadata: { followUpId: followUp._id },
+        createdBy: authResult.user.userId,
+      }).catch(() => {})
     }
 
     return Response.json({ followUp })

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
-  Calendar,
   FileText,
   MapPin,
   MessageSquare,
@@ -27,13 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
@@ -49,12 +41,6 @@ export default function LeadDetailPage({ params }) {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [note, setNote] = useState('')
-  const [showFollowUp, setShowFollowUp] = useState(false)
-  const [followUpForm, setFollowUpForm] = useState({
-    type: 'call',
-    scheduledDate: '',
-    description: '',
-  })
   const [user, setUser] = useState(null)
   const [lostForm, setLostForm] = useState({
     lostReason: '',
@@ -268,33 +254,6 @@ export default function LeadDetailPage({ params }) {
     loadAll()
   }
 
-  const createFollowUp = async () => {
-    if (!followUpForm.scheduledDate) {
-      toast.error('Schedule date is required')
-      return
-    }
-    const res = await fetch('/api/follow-ups', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        leadId: id,
-        assignedTo: user?.id || user?.userId || user?._id,
-        type: followUpForm.type,
-        scheduledDate: followUpForm.scheduledDate,
-        description: followUpForm.description,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed to schedule follow-up')
-      return
-    }
-    setShowFollowUp(false)
-    setFollowUpForm({ type: 'call', scheduledDate: '', description: '' })
-    toast.success('Follow-up scheduled')
-    loadAll()
-  }
-
   const saveLostDetails = async () => {
     setSavingLost(true)
     try {
@@ -366,6 +325,27 @@ export default function LeadDetailPage({ params }) {
     router.push('/dashboard/bookings')
   }
 
+  // Remarks entered while actioning a follow-up are logged to the timeline
+  // going forward (see PATCH /api/follow-ups/[id]), tagged with
+  // metadata.followUpId. Older follow-ups predate that and only ever had
+  // their remark stored on the FollowUp record itself — merge those in here
+  // so past remark history still shows, without double-counting the ones
+  // that already have a matching timeline entry.
+  const loggedFollowUpIds = new Set(
+    timeline.filter((t) => t.metadata?.followUpId).map((t) => String(t.metadata.followUpId))
+  )
+  const legacyFollowUpEntries = followUps
+    .filter((fu) => fu.description?.trim() && !loggedFollowUpIds.has(String(fu._id)))
+    .map((fu) => ({
+      _id: `fu-${fu._id}`,
+      title: fu.status === 'completed' ? 'Follow-up completed' : 'Follow-up remark',
+      body: fu.description,
+      createdAt: fu.updatedAt || fu.createdAt,
+    }))
+  const timelineEntries = [...timeline, ...legacyFollowUpEntries].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  )
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -406,10 +386,6 @@ export default function LeadDetailPage({ params }) {
           </div>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowFollowUp(true)}>
-            <Calendar className="mr-2 h-4 w-4" />
-            Schedule follow-up
-          </Button>
           <Button asChild className="w-full sm:w-auto">
             <Link href={`/dashboard/itinerary-builder?leadId=${id}`}>
               <FileText className="mr-2 h-4 w-4" />
@@ -443,18 +419,33 @@ export default function LeadDetailPage({ params }) {
             </div>
             <div className="pt-2">
               <Label className="text-xs text-muted-foreground">Pipeline status</Label>
-              <Select value={lead.status} onValueChange={updateStatus}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusMasters.map((s) => (
-                    <SelectItem key={s.key} value={s.key} className="capitalize">
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                {(() => {
+                  const opt = statusMasters.find((s) => s.key === lead.status)
+                  const color = opt?.color || '#3b82f6'
+                  return (
+                    <span
+                      className="inline-block rounded-full px-3 py-1.5 text-sm font-medium capitalize"
+                      style={{ backgroundColor: `${color}22`, color }}
+                    >
+                      {opt?.label || lead.status}
+                    </span>
+                  )
+                })()}
+              </div>
+              {/* Status changes go through Follow-ups (each one requires a
+               * remark) so there's always a reason on record — except
+               * Booked, which needs the itinerary + payment panel below. */}
+              {lead.status !== 'booked' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => updateStatus('booked')}
+                >
+                  Mark as booked
+                </Button>
+              )}
             </div>
 
             {/* Marking the lead Booked — pick which itinerary the client
@@ -693,10 +684,10 @@ export default function LeadDetailPage({ params }) {
               Add note
             </Button>
             <div className="max-h-64 space-y-3 overflow-y-auto border-t pt-4">
-              {timeline.length === 0 ? (
+              {timelineEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No activity yet</p>
               ) : (
-                timeline.map((item) => (
+                timelineEntries.map((item) => (
                   <div key={item._id} className="rounded-lg border bg-muted/30 px-3 py-2">
                     <p className="text-sm font-medium">{item.title}</p>
                     {(item.body || item.description) && (
@@ -803,49 +794,6 @@ export default function LeadDetailPage({ params }) {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={showFollowUp} onOpenChange={setShowFollowUp}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Schedule follow-up</DialogTitle>
-            <DialogDescription>Set a reminder to contact {leadDisplayName(lead)}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select
-                value={followUpForm.type}
-                onValueChange={(v) => setFollowUpForm((f) => ({ ...f, type: v }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {followUpTypes.map((t) => (
-                    <SelectItem key={t.key} value={t.key} className="capitalize">
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Date & time</Label>
-              <Input
-                type="datetime-local"
-                value={followUpForm.scheduledDate}
-                onChange={(e) => setFollowUpForm((f) => ({ ...f, scheduledDate: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                value={followUpForm.description}
-                onChange={(e) => setFollowUpForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            <Button className="w-full" onClick={createFollowUp}>Schedule</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
