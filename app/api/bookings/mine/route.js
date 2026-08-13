@@ -2,6 +2,12 @@ import connectDB from '@/lib/mongodb'
 import Booking from '@/models/Booking'
 import Voucher from '@/models/Voucher'
 import ItineraryDay from '@/models/ItineraryDay'
+// Not referenced directly below, but required so mongoose has these schemas
+// registered before the .populate('leadId', ...) / .populate('itineraryId', ...)
+// calls run — without it, a cold serverless instance that hasn't handled any
+// other route yet throws "Schema hasn't been registered for model" here.
+import '@/models/Lead'
+import '@/models/Itinerary'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import {
   computeHotelConfirmations,
