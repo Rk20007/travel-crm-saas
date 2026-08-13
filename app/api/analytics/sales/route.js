@@ -11,6 +11,20 @@ function startOfDay(d) {
   return x
 }
 
+// The server (Vercel) runs in UTC, but "today" for this CRM's users means
+// the calendar day in India (IST, UTC+5:30) — the timezone the scheduledDate
+// pickers, the phone in the sales agent's hand, and `toLocaleString()` in
+// their browser all use. Bucketing "today" by raw UTC would put IST's first
+// ~5.5 hours of each day (00:00–05:30 IST) on the *previous* UTC day, so a
+// follow-up an agent sees as "today" at 12:30 AM IST would get filed as
+// pending/overdue instead. IST has no DST, so a fixed offset is safe.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+function istStartOfDay(d) {
+  const shifted = new Date(new Date(d).getTime() + IST_OFFSET_MS)
+  shifted.setUTCHours(0, 0, 0, 0)
+  return new Date(shifted.getTime() - IST_OFFSET_MS)
+}
+
 export async function GET(request) {
   try {
     const authResult = await authenticate(request)
@@ -47,9 +61,8 @@ export async function GET(request) {
     const base = { teamId: tid, assignedTo: uid }
 
     const now = new Date()
-    const todayStart = startOfDay(now)
-    const todayEnd = new Date(todayStart)
-    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1)
+    const todayStart = istStartOfDay(now)
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
 
     const [newLeadsInRange, pendingFollowUpDocs, bookingDocs, notContacted] =
       await Promise.all([
@@ -107,7 +120,10 @@ export async function GET(request) {
       bookingsClosed++
     }
 
-    const recentLeads = await Lead.find(base)
+    // Closed leads (booked/completed) have moved on to Bookings — same rule
+    // the Leads page uses to drop them off the active list, so a just-closed
+    // lead doesn't crowd out what Sales should actually be working next.
+    const recentLeads = await Lead.find({ ...base, status: { $nin: ['booked', 'completed'] } })
       .sort({ createdAt: -1 })
       .limit(5)
       .select('firstName lastName email phone status source destination travelDate createdAt')

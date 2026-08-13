@@ -1276,6 +1276,10 @@ export default function LeadsPage() {
         lead={remarksLead}
         open={remarksOpen}
         onOpenChange={setRemarksOpen}
+        onSaved={() => {
+          fetchLeads()
+          fetchStatusCounts()
+        }}
       />
     </div>
   )

@@ -29,7 +29,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
-import { toCompressedDataUrl, dataUrlSize } from '@/lib/imageCompress'
 
 export default function LeadDetailPage({ params }) {
   const { id } = use(params)
@@ -40,7 +39,6 @@ export default function LeadDetailPage({ params }) {
   const [followUps, setFollowUps] = useState([])
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
-  const [note, setNote] = useState('')
   const [user, setUser] = useState(null)
   const [lostForm, setLostForm] = useState({
     lostReason: '',
@@ -49,19 +47,6 @@ export default function LeadDetailPage({ params }) {
     remarks: '',
   })
   const [savingLost, setSavingLost] = useState(false)
-  const [showBookPanel, setShowBookPanel] = useState(false)
-  const [bookForm, setBookForm] = useState({
-    itineraryId: '',
-    opsAssignedTo: '',
-    accountsAssignedTo: '',
-    advanceAmount: '',
-    advanceZeroReason: '',
-    advanceScreenshot: '',
-  })
-  const [bookSaving, setBookSaving] = useState(false)
-  const [compressingScreenshot, setCompressingScreenshot] = useState(false)
-  const [opsMembers, setOpsMembers] = useState([])
-  const [accountsMembers, setAccountsMembers] = useState([])
 
   const { options: statusMasters } = useMasters('lead_status', LEAD_STATUSES)
   const { options: followUpTypes } = useMasters('follow_up_type', [
@@ -122,137 +107,6 @@ export default function LeadDetailPage({ params }) {
     }
     loadAll()
   }, [id])
-
-  useEffect(() => {
-    // Lets the "Booked" panel offer a hand-picked Operations/Accounts person
-    // instead of always falling back to round-robin.
-    const fetchMembers = async () => {
-      try {
-        const res = await fetch('/api/team/members', {
-          headers: { Authorization: `Bearer ${token()}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const all = data.members || []
-          setOpsMembers(all.filter((m) => m.role === 'operations'))
-          setAccountsMembers(all.filter((m) => m.role === 'accounts'))
-        }
-      } catch (error) {
-        console.error('Error fetching team members:', error)
-      }
-    }
-    fetchMembers()
-  }, [])
-
-  const updateStatus = async (status) => {
-    // "Booked" needs an itinerary + a real Booking record, not just a status
-    // flip — show the inline panel instead of silently changing the status.
-    if (status === 'booked') {
-      setBookForm({
-        itineraryId: '',
-        opsAssignedTo: '',
-        accountsAssignedTo: '',
-        advanceAmount: '',
-        advanceZeroReason: '',
-        advanceScreenshot: '',
-      })
-      setShowBookPanel(true)
-      return
-    }
-    const res = await fetch(`/api/leads/${id}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    if (!res.ok) {
-      toast.error('Failed to update status')
-      return
-    }
-    toast.success('Status updated')
-    loadAll()
-  }
-
-  const confirmBooking = async () => {
-    if (!bookForm.itineraryId) {
-      toast.error('Select the itinerary the client booked on')
-      return
-    }
-    if (bookForm.advanceAmount === '') {
-      toast.error('Enter the advance amount the client paid (0 if none)')
-      return
-    }
-    const advanceAmount = Number(bookForm.advanceAmount)
-    if (advanceAmount === 0 && !bookForm.advanceZeroReason.trim()) {
-      toast.error('Explain why the advance is 0')
-      return
-    }
-    if (advanceAmount > 0 && !bookForm.advanceScreenshot) {
-      toast.error('Upload a screenshot of the advance payment')
-      return
-    }
-    setBookSaving(true)
-    try {
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: id,
-          itineraryId: bookForm.itineraryId,
-          opsAssignedTo: bookForm.opsAssignedTo || undefined,
-          accountsAssignedTo: bookForm.accountsAssignedTo || undefined,
-          advanceAmount,
-          advanceZeroReason: advanceAmount === 0 ? bookForm.advanceZeroReason.trim() : undefined,
-          advanceScreenshot: advanceAmount > 0 ? bookForm.advanceScreenshot : undefined,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Booking failed')
-        return
-      }
-      toast.success('Booking created')
-      setShowBookPanel(false)
-      loadAll()
-    } finally {
-      setBookSaving(false)
-    }
-  }
-
-  // Advance payment screenshots are compressed client-side to under 70KB
-  // before being sent to the server.
-  const handleScreenshotPick = async (e) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setCompressingScreenshot(true)
-    try {
-      const dataUrl = await toCompressedDataUrl(file, 70 * 1024)
-      if (dataUrlSize(dataUrl) > 70 * 1024) {
-        toast.info('Screenshot compressed as much as possible, but is still a bit over 70KB')
-      }
-      setBookForm((f) => ({ ...f, advanceScreenshot: dataUrl }))
-    } catch {
-      toast.error('Could not process that image')
-    } finally {
-      setCompressingScreenshot(false)
-    }
-  }
-
-  const addNote = async () => {
-    if (!note.trim()) return
-    const res = await fetch(`/api/leads/${id}/timeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'note', title: 'Note', note: note.trim() }),
-    })
-    if (!res.ok) {
-      toast.error('Failed to add note')
-      return
-    }
-    setNote('')
-    toast.success('Note added')
-    loadAll()
-  }
 
   const saveLostDetails = async () => {
     setSavingLost(true)
@@ -433,155 +287,7 @@ export default function LeadDetailPage({ params }) {
                   )
                 })()}
               </div>
-              {/* Status changes go through Follow-ups (each one requires a
-               * remark) so there's always a reason on record — except
-               * Booked, which needs the itinerary + payment panel below. */}
-              {lead.status !== 'booked' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => updateStatus('booked')}
-                >
-                  Mark as booked
-                </Button>
-              )}
             </div>
-
-            {/* Marking the lead Booked — pick which itinerary the client
-             * actually closed on. Trip dates, travelers, and amount all come
-             * from that itinerary; nothing else needs to be entered here. */}
-            {showBookPanel && (
-              <div className="mt-2 space-y-3 rounded-lg border border-success/40 bg-success/15 p-3">
-                <p className="text-sm font-semibold text-success">Confirm booking</p>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Itinerary *</Label>
-                  {itineraries.length === 0 ? (
-                    <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
-                      No itineraries created for this lead yet — create one before booking.
-                    </p>
-                  ) : (
-                    <Select
-                      value={bookForm.itineraryId}
-                      onValueChange={(v) => setBookForm((f) => ({ ...f, itineraryId: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select the itinerary the client booked on" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {itineraries.map((it) => (
-                          <SelectItem key={it._id} value={it._id}>
-                            {leadDisplayName(lead)}
-                            {it.destination ? ` · ${it.destination}` : ''}
-                            {it.totalPrice || it.totalCost ? ` · ${formatInr(it.totalPrice || it.totalCost)}` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Advance paid (₹) *</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={bookForm.advanceAmount}
-                    onChange={(e) => setBookForm((f) => ({ ...f, advanceAmount: e.target.value }))}
-                    placeholder="e.g. 5000"
-                  />
-                </div>
-
-                {bookForm.advanceAmount !== '' && Number(bookForm.advanceAmount) === 0 ? (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Why is the advance 0? *</Label>
-                    <Textarea
-                      value={bookForm.advanceZeroReason}
-                      onChange={(e) => setBookForm((f) => ({ ...f, advanceZeroReason: e.target.value }))}
-                      placeholder="e.g. Client will pay full amount on arrival"
-                      className="min-h-[60px]"
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Payment screenshot *</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleScreenshotPick}
-                      disabled={compressingScreenshot}
-                    />
-                    {compressingScreenshot && (
-                      <p className="text-xs text-muted-foreground">Compressing…</p>
-                    )}
-                    {bookForm.advanceScreenshot && !compressingScreenshot && (
-                      <div className="flex items-center gap-2 pt-1">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={bookForm.advanceScreenshot}
-                          alt="Advance payment screenshot"
-                          className="h-14 w-14 rounded-md border object-cover"
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {Math.round(dataUrlSize(bookForm.advanceScreenshot) / 1024)}KB
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Operations</Label>
-                  <Select
-                    value={bookForm.opsAssignedTo}
-                    onValueChange={(v) => setBookForm((f) => ({ ...f, opsAssignedTo: v }))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Auto-assign (round robin)" /></SelectTrigger>
-                    <SelectContent>
-                      {opsMembers.map((m) => (
-                        <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Accounts</Label>
-                  <Select
-                    value={bookForm.accountsAssignedTo}
-                    onValueChange={(v) => setBookForm((f) => ({ ...f, accountsAssignedTo: v }))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Auto-assign (round robin)" /></SelectTrigger>
-                    <SelectContent>
-                      {accountsMembers.map((m) => (
-                        <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button size="sm" variant="outline" onClick={() => setShowBookPanel(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={confirmBooking}
-                    disabled={
-                      bookSaving ||
-                      compressingScreenshot ||
-                      !bookForm.itineraryId ||
-                      bookForm.advanceAmount === '' ||
-                      (Number(bookForm.advanceAmount) === 0 && !bookForm.advanceZeroReason.trim()) ||
-                      (Number(bookForm.advanceAmount) > 0 && !bookForm.advanceScreenshot)
-                    }
-                  >
-                    {bookSaving ? 'Booking…' : 'Confirm Booking'}
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {/* Lost lead follow-up — only visible for lost leads */}
             {lead.status === 'lost' && (
@@ -672,18 +378,7 @@ export default function LeadDetailPage({ params }) {
             <CardDescription>Notes and system events for this lead</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Textarea
-                placeholder="Add a note..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="min-h-[80px]"
-              />
-            </div>
-            <Button size="sm" onClick={addNote} disabled={!note.trim()}>
-              Add note
-            </Button>
-            <div className="max-h-64 space-y-3 overflow-y-auto border-t pt-4">
+            <div className="max-h-64 space-y-3 overflow-y-auto">
               {timelineEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No activity yet</p>
               ) : (
