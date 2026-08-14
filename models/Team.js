@@ -109,6 +109,35 @@ const teamSchema = new mongoose.Schema(
     /** Meta Lead Ads — page ID for webhook routing to this agency */
     metaPageId: { type: String, sparse: true },
 
+    /**
+     * Meta Lead Ads *pull* sync. The webhook above needs Meta to be configured
+     * to call us; this is the opposite direction — the agency pastes a form ID
+     * and a page access token, and the CRM polls the Graph API for new leads.
+     * Useful when the agency can't (or won't) set up webhooks on their page.
+     */
+    metaSync: {
+      enabled: { type: Boolean, default: false },
+      /** One or more Lead Ads form IDs to poll. */
+      formIds: [String],
+      /**
+       * Page access token, AES-256-GCM encrypted at rest — it grants read
+       * access to the agency's leads, so it never sits in the DB in plaintext
+       * and is never returned to the browser.
+       */
+      accessTokenEnc: String,
+      tokenSavedAt: Date,
+      /** Only leads created after this are pulled, so each run stays cheap. */
+      lastLeadCreatedTime: Date,
+      lastSyncAt: Date,
+      lastSyncStatus: {
+        type: String,
+        enum: ['ok', 'partial', 'error'],
+      },
+      lastSyncError: String,
+      lastSyncCreated: { type: Number, default: 0 },
+      totalSynced: { type: Number, default: 0 },
+    },
+
     settings: {
       currency: {
         type: String,

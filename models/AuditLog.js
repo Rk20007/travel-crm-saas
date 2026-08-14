@@ -47,6 +47,8 @@ const auditLogSchema = new mongoose.Schema(
         'password_reset',
         'impersonate_start',
         'impersonate_stop',
+        'meta_sync_settings_updated',
+        'meta_sync_manual_run',
       ],
       required: true,
     },

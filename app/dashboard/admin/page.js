@@ -32,7 +32,7 @@ import { AlertCircle, KeyRound, Loader2, UserPlus, Scale } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/crm/PageHeader'
 import { TableShell } from '@/components/crm/TableShell'
-import { LeadIngestSetup } from '@/components/crm/LeadIngestSetup'
+import { MetaLeadSync } from '@/components/crm/MetaLeadSync'
 
 const ROLES = [
   { value: 'agent', label: 'Sales Employee' },
@@ -185,7 +185,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <LeadIngestSetup />
+      <MetaLeadSync />
 
       <Card>
         <CardHeader>
