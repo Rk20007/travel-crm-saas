@@ -65,11 +65,23 @@ export function NotificationBell() {
   const handleEnablePush = async () => {
     setPushBusy(true)
     const token = localStorage.getItem('token')
-    const result = await enablePushNotifications(token)
-    setPushBusy(false)
-    setPushPermission(getPushPermission())
-    if (!result.ok && result.reason === 'denied') {
-      alert('Notifications were blocked. Enable them from your browser\'s site settings to receive alerts on this device.')
+    try {
+      const result = await enablePushNotifications(token)
+      setPushPermission(getPushPermission())
+      if (!result.ok) {
+        if (result.reason === 'denied') {
+          alert('Notifications were blocked. Enable them from your browser\'s site settings to receive alerts on this device.')
+        } else if (result.reason === 'save-failed') {
+          alert('Could not save this device for notifications. Check your connection and try again.')
+        }
+      }
+    } catch {
+      // A rejected promise anywhere in the subscribe chain (e.g. the
+      // browser's push service being unreachable) used to leave the button
+      // stuck on "busy" forever with no feedback — surface it instead.
+      alert('Could not enable notifications on this device. Please try again.')
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -102,17 +114,33 @@ export function NotificationBell() {
           const fresh = list.filter((n) => !seenIdsRef.current.has(n._id))
           fresh.forEach((n) => {
             playChime()
-            toast(n.title, {
-              description: n.message,
-              position: 'bottom-right',
-              duration: 8000,
-              action: n.action?.link
-                ? {
-                    label: n.action.text || 'Open',
-                    onClick: () => router.push(n.action.link),
-                  }
-                : undefined,
-            })
+            // Custom render (instead of the plain toast(title, {description})
+            // form) so we can put the "Powered by" brand line above the
+            // title and size the whole card up a notch.
+            toast.custom(
+              (id) => (
+                <div className="flex w-full max-w-sm flex-col gap-1 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg sm:max-w-md">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    Powered by Deenx Consultancy &middot; 9667266614
+                  </p>
+                  <p className="text-base font-semibold leading-snug">{n.title}</p>
+                  {n.message && <p className="text-sm text-muted-foreground">{n.message}</p>}
+                  {n.action?.link && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        router.push(n.action.link)
+                        toast.dismiss(id)
+                      }}
+                      className="mt-1 self-start text-sm font-medium text-primary hover:underline"
+                    >
+                      {n.action.text || 'Open'}
+                    </button>
+                  )}
+                </div>
+              ),
+              { position: 'top-right', duration: 8000 }
+            )
           })
         }
         seenIdsRef.current = new Set(list.map((n) => n._id))

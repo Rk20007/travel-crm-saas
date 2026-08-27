@@ -52,7 +52,7 @@ export default function PreviewItineraryPage({ params }) {
           Export PDF
         </Button>
       </div>
-      <ItineraryPreview itinerary={data?.itinerary} days={data?.days} />
+      <ItineraryPreview itinerary={data?.itinerary} days={data?.days} brand={data?.brand} />
     </div>
   )
 }

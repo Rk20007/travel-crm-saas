@@ -22,7 +22,15 @@ function useAutoFillFromMaster(items, options, onChange) {
 }
 
 function PolicySection({ title, items, onChange, placeholder, defaults, loading }) {
-  const add = () => onChange([...items, ''])
+  const inputRef = useRef(null)
+  // The "+" button used to add a blank row regardless of what was typed —
+  // it now reads the same input Enter already worked from.
+  const add = () => {
+    const val = inputRef.current?.value.trim()
+    if (!val) return
+    onChange([...items, val])
+    inputRef.current.value = ''
+  }
   const update = (i, val) => onChange(items.map((x, idx) => (idx === i ? val : x)))
   const remove = (i) => onChange(items.filter((_, idx) => idx !== i))
 
@@ -37,6 +45,7 @@ function PolicySection({ title, items, onChange, placeholder, defaults, loading 
       <CardContent className="space-y-3">
         <div className="flex gap-2">
           <Input
+            ref={inputRef}
             placeholder={placeholder}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.currentTarget.value.trim()) {

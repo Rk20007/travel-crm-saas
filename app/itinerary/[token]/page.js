@@ -37,6 +37,7 @@ export default function PublicItineraryPage({ params }) {
     <ItineraryPreview
       itinerary={data.itinerary}
       days={data.days}
+      brand={data.brand}
       publicView
     />
   )

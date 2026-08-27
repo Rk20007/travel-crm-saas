@@ -16,16 +16,18 @@ export function getRoomLines(stay) {
 /** A stay's extra-bed/CNB cost — the trip-level extra bed/CNB counts, priced at this
  * hotel's rate and charged across the stay's longest room-line duration.
  *
- * The hotel master (when available, e.g. live in the Costing step) is always
- * the source of truth for the rate — a stay's own extraBedCharge/cnbPrice is
- * only a snapshot taken when the hotel was picked, so it can go stale (e.g.
- * still 0 from before the hotel's rates were set up in Settings) and there's
- * no UI to edit it directly. Only fall back to that snapshot when no master
- * is available at all (e.g. computing totals without the hotel list loaded). */
+ * The hotel master (when available, e.g. live in the Costing step) is the
+ * source of truth for the rate — a stay's own extraBedCharge/cnbPrice is
+ * normally just a snapshot taken when the hotel was picked, kept in sync with
+ * the master automatically. Once the agent hand-edits the rate for this one
+ * stay (stay.extraChargeOverridden), that snapshot wins instead and the
+ * auto-sync leaves it alone — same override pattern as the vehicle/activity
+ * price edits elsewhere in Costing. */
 export function getStayExtraCost(stay, master, extraBeds = 0, cnbCount = 0) {
   const nights = Math.max(0, ...getRoomLines(stay).map((l) => Number(l.nights) || 0))
-  const extraBedCharge = Number(master ? master.extraBedCharge : stay?.extraBedCharge) || 0
-  const cnbPrice = Number(master ? master.cnbPrice : stay?.cnbPrice) || 0
+  const useMaster = !!master && !stay?.extraChargeOverridden
+  const extraBedCharge = Number(useMaster ? master.extraBedCharge : stay?.extraBedCharge) || 0
+  const cnbPrice = Number(useMaster ? master.cnbPrice : stay?.cnbPrice) || 0
   return nights * ((Number(extraBeds) || 0) * extraBedCharge + (Number(cnbCount) || 0) * cnbPrice)
 }
 

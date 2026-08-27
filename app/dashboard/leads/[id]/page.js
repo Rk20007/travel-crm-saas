@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
 
@@ -47,6 +48,10 @@ export default function LeadDetailPage({ params }) {
     remarks: '',
   })
   const [savingLost, setSavingLost] = useState(false)
+  const [opsMembers, setOpsMembers] = useState([])
+  const [accountsMembers, setAccountsMembers] = useState([])
+  const [bookLead, setBookLead] = useState(null)
+  const [bookOpen, setBookOpen] = useState(false)
 
   const { options: statusMasters } = useMasters('lead_status', LEAD_STATUSES)
   const { options: followUpTypes } = useMasters('follow_up_type', [
@@ -108,6 +113,27 @@ export default function LeadDetailPage({ params }) {
     loadAll()
   }, [id])
 
+  // Needed for the Create Booking dialog's Operations/Accounts assign pickers
+  // — same as the Leads list page.
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const res = await fetch('/api/team/members', {
+          headers: { Authorization: `Bearer ${token()}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const all = data.members || []
+          setOpsMembers(all.filter((m) => m.role === 'operations'))
+          setAccountsMembers(all.filter((m) => m.role === 'accounts'))
+        }
+      } catch (error) {
+        console.error('Error fetching team members:', error)
+      }
+    }
+    fetchMembers()
+  }, [])
+
   const saveLostDetails = async () => {
     setSavingLost(true)
     try {
@@ -150,33 +176,12 @@ export default function LeadDetailPage({ params }) {
     }
   }
 
-  const convertToBooking = async (itinerary) => {
-    const total = itinerary.totalPrice || itinerary.totalCost || 0
-    const advance = Math.round(total * 0.3)
-    const balance = total - advance
-    const res = await fetch('/api/bookings', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        leadId: id,
-        itineraryId: itinerary._id,
-        // Trip dates, travelers, and amount are derived from the itinerary
-        // itself on the backend — only the payment split needs to be sent.
-        paymentSchedule: [
-          { dueDate: new Date(), amount: advance, status: 'pending' },
-          ...(balance > 0
-            ? [{ dueDate: itinerary.startDate, amount: balance, status: 'pending' }]
-            : []),
-        ],
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Booking failed')
-      return
-    }
-    toast.success('Booking created')
-    router.push('/dashboard/bookings')
+  // Marking a lead Booked always goes through the same Create Booking dialog
+  // as the Leads list (itinerary pick, advance paid + screenshot, Ops/Accounts
+  // assign) — no more silent auto-30%-advance shortcut from this page.
+  const openBook = () => {
+    setBookLead(lead)
+    setBookOpen(true)
   }
 
   // Remarks entered while actioning a follow-up are logged to the timeline
@@ -273,7 +278,7 @@ export default function LeadDetailPage({ params }) {
             </div>
             <div className="pt-2">
               <Label className="text-xs text-muted-foreground">Pipeline status</Label>
-              <div className="mt-1">
+              <div className="mt-1 flex items-center gap-2">
                 {(() => {
                   const opt = statusMasters.find((s) => s.key === lead.status)
                   const color = opt?.color || '#3b82f6'
@@ -286,6 +291,11 @@ export default function LeadDetailPage({ params }) {
                     </span>
                   )
                 })()}
+                {!['booked', 'completed'].includes(lead.status) && (
+                  <Button size="sm" variant="outline" onClick={openBook}>
+                    Mark as Booked
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -433,7 +443,7 @@ export default function LeadDetailPage({ params }) {
                     <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
                       <Link href={`/dashboard/itinerary-builder?id=${it._id}`}>Edit</Link>
                     </Button>
-                    <Button size="sm" className="w-full sm:w-auto" onClick={() => convertToBooking(it)}>
+                    <Button size="sm" className="w-full sm:w-auto" onClick={openBook}>
                       Book
                     </Button>
                   </div>
@@ -489,6 +499,19 @@ export default function LeadDetailPage({ params }) {
           </CardContent>
         </Card>
       )}
+
+      <CreateBookingDialog
+        lead={bookLead}
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+        opsMembers={opsMembers}
+        accountsMembers={accountsMembers}
+        onBooked={() => {
+          toast.success('Booking created')
+          loadAll()
+          router.push('/dashboard/bookings')
+        }}
+      />
     </div>
   )
 }

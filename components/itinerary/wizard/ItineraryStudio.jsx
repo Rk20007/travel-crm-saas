@@ -42,6 +42,19 @@ export default function ItineraryStudio({ itineraryId = null, initialData = null
   const [savedId, setSavedId] = useState(itineraryId)
   const [saving, setSaving] = useState(false)
   const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  // Set the moment Continue is blocked on a blank day, so StepPlan can
+  // highlight exactly which day/field is still empty — clears itself the
+  // instant the day is filled in (see StepPlan's live re-check).
+  const [showPlanErrors, setShowPlanErrors] = useState(false)
+
+  // Continuing to the next step used to leave the page scrolled wherever the
+  // previous step's Continue button happened to be — the new step then
+  // rendered starting mid-scroll instead of from its own top. The dashboard
+  // shell scrolls its own <main>, not the window, so both need resetting.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'auto' })
+  }, [step])
 
   useEffect(() => {
     if (initialData?.itinerary) {
@@ -108,6 +121,18 @@ export default function ItineraryStudio({ itineraryId = null, initialData = null
       if (form.tripName !== form.destination) {
         setForm((prev) => ({ ...prev, tripName: prev.destination }))
       }
+    }
+    if (step === 3) {
+      const days = form.days || []
+      const blankIndex = days.findIndex(
+        (d) => !d.title?.trim() || !d.description?.trim()
+      )
+      if (blankIndex !== -1) {
+        setShowPlanErrors(true)
+        toast.error(`Fill in Day ${blankIndex + 1}'s activity title and description before continuing`)
+        return false
+      }
+      setShowPlanErrors(false)
     }
     return true
   }
@@ -179,7 +204,7 @@ export default function ItineraryStudio({ itineraryId = null, initialData = null
       />
       <WizardStepper currentStep={step} />
       <div>
-        {StepComponent && <StepComponent form={form} update={update} />}
+        {StepComponent && <StepComponent form={form} update={update} showErrors={showPlanErrors} />}
       </div>
       <WizardFooter
         step={step}
@@ -194,6 +219,8 @@ export default function ItineraryStudio({ itineraryId = null, initialData = null
         onOpenChange={setTemplateModalOpen}
         onConfirm={(theme) => persist(theme)}
         generating={saving}
+        form={form}
+        update={update}
       />
     </div>
   )

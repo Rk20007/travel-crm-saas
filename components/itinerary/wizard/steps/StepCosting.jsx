@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Car, X, Loader2 } from 'lucide-react'
+import { Plus, Car, X, Loader2, Pencil, Check } from 'lucide-react'
 import {
   getRoomLines,
   getStayExtraCost,
@@ -88,6 +88,10 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
     if (!hotelMasters.length) return
     const additions = new Map()
     for (const s of stays) {
+      // A rate the agent hand-edited for this stay (see the Extra bed / CNB
+      // charges block below) stays put — it doesn't get overwritten back to
+      // the master rate on the next sync pass.
+      if (s.extraChargeOverridden) continue
       const m = hotelMasters.find((hm) => hm._id === s.hotelId)
       if (!m) continue
       const extraBedCharge = m.extraBedCharge || 0
@@ -191,7 +195,8 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
             const rooms = Number(l.roomCount) || 1
             return sum + nights * rooms * (Number(l.pricePerNight) || 0)
           }, 0)
-          const stayTotal = roomsTotal + getStayExtraCost(stay, master, extraBeds, cnbCount)
+          const extraCost = getStayExtraCost(stay, master, extraBeds, cnbCount)
+          const stayTotal = roomsTotal + extraCost
           return (
             <div key={i} className="overflow-hidden rounded-xl border border-border/60 shadow-sm">
               <div className="bg-linear-to-r from-primary/10 to-transparent p-3">
@@ -357,6 +362,55 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
                 ))}
               </div>
 
+              {(extraBeds > 0 || cnbCount > 0) && (
+                <div className="space-y-2 border-t px-3 pt-2">
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                    <span className="h-3 w-1 rounded-full bg-primary" />
+                    Extra bed / CNB charges
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {extraBeds > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Extra bed rate (₹/night × {extraBeds})</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={stay.extraBedCharge ?? ''}
+                          onChange={(e) =>
+                            updateNightStay(stay, {
+                              extraBedCharge: e.target.value === '' ? '' : Number(e.target.value) || 0,
+                              extraChargeOverridden: true,
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                    {cnbCount > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">CNB rate (₹/night × {cnbCount})</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={stay.cnbPrice ?? ''}
+                          onChange={(e) =>
+                            updateNightStay(stay, {
+                              cnbPrice: e.target.value === '' ? '' : Number(e.target.value) || 0,
+                              extraChargeOverridden: true,
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Extra charge total: </span>
+                    <span className="font-semibold text-primary">
+                      {extraCost ? formatPrice(extraCost) : 'Price on request'}
+                    </span>
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-end justify-end gap-3 border-t px-3 py-2">
                 <div className="space-y-1 text-right">
                   <Label className="text-xs">Total stay price</Label>
@@ -391,6 +445,12 @@ export default function StepCosting({ form, update }) {
   const [flatInput, setFlatInput] = useState('')
   const [hotelMasters, setHotelMasters] = useState([])
   const [mastersLoading, setMastersLoading] = useState(true)
+  // Which already-added vehicle/activity chip's price is being hand-edited
+  // right now (index into form.vehicles / form.activities, or null).
+  const [editingVehicleIndex, setEditingVehicleIndex] = useState(null)
+  const [editVehicleCost, setEditVehicleCost] = useState('')
+  const [editingActivityIndex, setEditingActivityIndex] = useState(null)
+  const [editActivityCost, setEditActivityCost] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -442,6 +502,19 @@ export default function StepCosting({ form, update }) {
     update({ vehicles: (form.vehicles || []).filter((_, i) => i !== index) })
   }
 
+  const startEditVehicleCost = (index) => {
+    setEditingVehicleIndex(index)
+    setEditVehicleCost(String((form.vehicles || [])[index]?.cost ?? ''))
+  }
+
+  const saveVehicleCost = () => {
+    const cost = Number(editVehicleCost) || 0
+    update({
+      vehicles: (form.vehicles || []).map((v, i) => (i === editingVehicleIndex ? { ...v, cost } : v)),
+    })
+    setEditingVehicleIndex(null)
+  }
+
   const adults = Number(form.numberOfAdults) || 0
   const children = Number(form.numberOfChildren) || 0
   const totalPax = adults + children
@@ -491,6 +564,19 @@ export default function StepCosting({ form, update }) {
 
   const removeActivity = (index) => {
     update({ activities: (form.activities || []).filter((_, i) => i !== index) })
+  }
+
+  const startEditActivityCost = (index) => {
+    setEditingActivityIndex(index)
+    setEditActivityCost(String((form.activities || [])[index]?.cost ?? ''))
+  }
+
+  const saveActivityCost = () => {
+    const cost = Number(editActivityCost) || 0
+    update({
+      activities: (form.activities || []).map((a, i) => (i === editingActivityIndex ? { ...a, cost } : a)),
+    })
+    setEditingActivityIndex(null)
   }
 
   const addPercentCharge = () => {
@@ -642,6 +728,31 @@ export default function StepCosting({ form, update }) {
               ) : (
                 (form.vehicles || []).map((v, i) => {
                   const routeLabel = [v.fromLocation, v.toLocation].filter(Boolean).join(' → ')
+                  if (editingVehicleIndex === i) {
+                    return (
+                      <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-xs">
+                        ₹
+                        <Input
+                          type="number"
+                          autoFocus
+                          value={editVehicleCost}
+                          onChange={(e) => setEditVehicleCost(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && saveVehicleCost()}
+                          className="h-6 w-24 px-1.5 py-0"
+                        />
+                        <button type="button" onClick={saveVehicleCost} className="text-primary hover:text-primary/80">
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingVehicleIndex(null)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    )
+                  }
                   return (
                     <span
                       key={i}
@@ -652,6 +763,14 @@ export default function StepCosting({ form, update }) {
                       {v.selectedType ? ` - ${v.selectedType}` : ''}
                       {v.days ? ` · ${v.days}d` : ''}
                       {v.cost ? ` — ${formatPrice(v.cost)}` : ''}
+                      <button
+                        type="button"
+                        onClick={() => startEditVehicleCost(i)}
+                        className="text-muted-foreground hover:text-primary"
+                        title="Edit price"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => removeVehicleSelection(i)}
@@ -693,7 +812,9 @@ export default function StepCosting({ form, update }) {
                   type="number"
                   min={1}
                   value={activityQty}
-                  onChange={(e) => setActivityQty(Number(e.target.value) || 1)}
+                  onChange={(e) =>
+                    setActivityQty(e.target.value === '' ? '' : Number(e.target.value) || 1)
+                  }
                   className="h-9 w-20"
                 />
               </div>
@@ -706,20 +827,52 @@ export default function StepCosting({ form, update }) {
               {(form.activities || []).length === 0 ? (
                 <span className="text-xs text-muted-foreground">No activities added yet.</span>
               ) : (
-                (form.activities || []).map((a, i) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                    {a.name}
-                    {a.quantity > 1 ? ` ×${a.quantity}` : ''}
-                    {a.cost ? ` — ${formatPrice(a.cost)}` : ''}
-                    <button
-                      type="button"
-                      onClick={() => removeActivity(i)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))
+                (form.activities || []).map((a, i) =>
+                  editingActivityIndex === i ? (
+                    <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-xs">
+                      ₹
+                      <Input
+                        type="number"
+                        autoFocus
+                        value={editActivityCost}
+                        onChange={(e) => setEditActivityCost(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveActivityCost()}
+                        className="h-6 w-24 px-1.5 py-0"
+                      />
+                      <button type="button" onClick={saveActivityCost} className="text-primary hover:text-primary/80">
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingActivityIndex(null)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ) : (
+                    <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                      {a.name}
+                      {a.quantity > 1 ? ` ×${a.quantity}` : ''}
+                      {a.cost ? ` — ${formatPrice(a.cost)}` : ''}
+                      <button
+                        type="button"
+                        onClick={() => startEditActivityCost(i)}
+                        className="text-muted-foreground hover:text-primary"
+                        title="Edit price"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeActivity(i)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )
+                )
               )}
             </div>
           </div>

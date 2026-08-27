@@ -25,6 +25,7 @@ import { format } from 'date-fns'
 import { leadDisplayName } from '@/utils/crm'
 import { TableShell } from '@/components/crm/TableShell'
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon'
+import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
 
 const waLink = (phone) => `https://wa.me/${String(phone || '').replace(/\D/g, '')}`
@@ -67,10 +68,37 @@ function FollowUpsContent() {
   const [editForm, setEditForm] = useState({ scheduledDate: '', description: '', leadStatus: '' })
   const [saving, setSaving] = useState(false)
   const [dateOpen, setDateOpen] = useState(false)
+  const [opsMembers, setOpsMembers] = useState([])
+  const [accountsMembers, setAccountsMembers] = useState([])
+  const [bookLead, setBookLead] = useState(null)
+  const [bookOpen, setBookOpen] = useState(false)
+  const [pendingFollowUpId, setPendingFollowUpId] = useState(null)
 
   useEffect(() => {
     fetchFollowUps()
   }, [filter])
+
+  // Needed for the Create Booking dialog's Operations/Accounts assign
+  // pickers — same as the Leads list page.
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/team/members', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const all = data.members || []
+          setOpsMembers(all.filter((m) => m.role === 'operations'))
+          setAccountsMembers(all.filter((m) => m.role === 'accounts'))
+        }
+      } catch (error) {
+        console.error('Error fetching team members:', error)
+      }
+    }
+    fetchMembers()
+  }, [])
 
   const fetchFollowUps = async () => {
     try {
@@ -97,6 +125,19 @@ function FollowUpsContent() {
     })
   }
 
+  // Picking "Booked" opens the Create Booking dialog immediately — no need
+  // to fill the remark or press Save first, same as the Leads list's own
+  // status dropdown.
+  const handleEditStatusChange = (value) => {
+    setEditForm((f) => ({ ...f, leadStatus: value }))
+    if (value === 'booked' && editing) {
+      setPendingFollowUpId(editing._id)
+      setBookLead(editing.leadId)
+      setBookOpen(true)
+      setEditing(null)
+    }
+  }
+
   const selectedEditStatusOption = statusOptions.find((s) => s.key === editForm.leadStatus)
   const editNeedsFollowUp = !!selectedEditStatusOption?.metadata?.requiresFollowUp
 
@@ -119,29 +160,32 @@ function FollowUpsContent() {
       const token = localStorage.getItem('token')
       const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-      // Editing here means the follow-up has been actioned — update the
-      // lead's business status, and either reschedule this follow-up (if the
-      // new status still requires one) or mark it done (if it doesn't).
-      const [leadRes, followUpRes] = await Promise.all([
-        editing.leadId?._id
-          ? fetch(`/api/leads/${editing.leadId._id}`, {
-              method: 'PUT',
-              headers: authH,
-              body: JSON.stringify({ status: editForm.leadStatus }),
-            })
-          : Promise.resolve({ ok: true }),
-        fetch(`/api/follow-ups/${editing._id}`, {
-          method: 'PATCH',
-          headers: authH,
-          body: JSON.stringify({
-            description: editForm.description,
-            ...(editNeedsFollowUp
-              ? { status: 'pending', scheduledDate: editForm.scheduledDate }
-              : { status: 'completed' }),
-          }),
+      // "Booked" is handled the moment it's picked in the dropdown (see
+      // handleEditStatusChange) — by the time Save could be clicked here the
+      // status is always something else.
+      const followUpRes = await fetch(`/api/follow-ups/${editing._id}`, {
+        method: 'PATCH',
+        headers: authH,
+        body: JSON.stringify({
+          description: editForm.description,
+          ...(editNeedsFollowUp
+            ? { status: 'pending', scheduledDate: editForm.scheduledDate }
+            : { status: 'completed' }),
         }),
-      ])
-      if (!leadRes.ok || !followUpRes.ok) {
+      })
+      if (!followUpRes.ok) {
+        toast.error('Failed to update follow-up')
+        return
+      }
+
+      const leadRes = editing.leadId?._id
+        ? await fetch(`/api/leads/${editing.leadId._id}`, {
+            method: 'PUT',
+            headers: authH,
+            body: JSON.stringify({ status: editForm.leadStatus }),
+          })
+        : { ok: true }
+      if (!leadRes.ok) {
         toast.error('Failed to update follow-up')
         return
       }
@@ -393,7 +437,7 @@ function FollowUpsContent() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Status <span className="text-destructive">*</span></Label>
-              <Select value={editForm.leadStatus} onValueChange={(v) => setEditForm((f) => ({ ...f, leadStatus: v }))}>
+              <Select value={editForm.leadStatus} onValueChange={handleEditStatusChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {statusOptions.map((opt) => (
@@ -480,6 +524,29 @@ function FollowUpsContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CreateBookingDialog
+        lead={bookLead}
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+        opsMembers={opsMembers}
+        accountsMembers={accountsMembers}
+        onBooked={async () => {
+          // Booking succeeded → the follow-up that led here is done; mark it
+          // completed instead of leaving it pending forever.
+          if (pendingFollowUpId) {
+            const token = localStorage.getItem('token')
+            await fetch(`/api/follow-ups/${pendingFollowUpId}`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'completed' }),
+            }).catch(() => {})
+            setPendingFollowUpId(null)
+          }
+          toast.success('Booking created')
+          fetchFollowUps()
+        }}
+      />
     </div>
   )
 }

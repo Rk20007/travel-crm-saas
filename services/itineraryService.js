@@ -2,9 +2,27 @@ import Itinerary from '@/models/Itinerary'
 import ItineraryDay from '@/models/ItineraryDay'
 import ItineraryHotel from '@/models/ItineraryHotel'
 import ItineraryActivity from '@/models/ItineraryActivity'
+import Brand from '@/models/Brand'
 import { tenantFilter, withTenantBody } from '@/lib/tenant'
 import { generateShareToken } from '@/utils/itinerary'
 import { canOnlyViewOwnLeads } from '@/lib/permissions'
+
+/** Same resolution the PDF export uses: the itinerary's own brand if set,
+ * otherwise the team's default (or oldest) active brand — so the preview
+ * page always has a company to show in its footer. */
+async function resolveBrand(itinerary) {
+  if (!itinerary) return null
+  let brand = null
+  if (itinerary.brandId) {
+    brand = await Brand.findOne({ _id: itinerary.brandId, teamId: itinerary.teamId, isActive: true }).lean()
+  }
+  if (!brand) {
+    brand = await Brand.findOne({ teamId: itinerary.teamId, isActive: true })
+      .sort({ isDefault: -1, name: 1 })
+      .lean()
+  }
+  return brand
+}
 
 function parseDate(val) {
   if (!val) return undefined
@@ -103,11 +121,14 @@ export async function getItineraryFull(id, authUser) {
 
   if (!itinerary) return null
 
+  const brand = await resolveBrand(itinerary)
+
   return {
     itinerary,
     days,
     hotels,
     activities,
+    brand,
   }
 }
 
@@ -116,10 +137,11 @@ export async function getItineraryByShareToken(token) {
     .populate('assignedTo', 'name email phone')
     .lean()
   if (!itinerary) return null
-  const days = await ItineraryDay.find({ itineraryId: itinerary._id })
-    .sort({ sortOrder: 1, dayNumber: 1 })
-    .lean()
-  return { itinerary, days }
+  const [days, brand] = await Promise.all([
+    ItineraryDay.find({ itineraryId: itinerary._id }).sort({ sortOrder: 1, dayNumber: 1 }).lean(),
+    resolveBrand(itinerary),
+  ])
+  return { itinerary, days, brand }
 }
 
 async function syncDays(itineraryId, teamId, days = []) {
