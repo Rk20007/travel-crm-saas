@@ -26,12 +26,28 @@ import { Badge } from '@/components/ui/badge'
 import { getDefaultBanner, getDurationDays, getStatusColor } from '@/utils/itinerary'
 import { cn } from '@/lib/utils'
 
-// Day descriptions let the agent bold a phrase or two (**like this**) from
-// the Itinerary Builder's editor toolbar — render those markers as real
-// <strong> instead of showing the raw asterisks.
+// Day descriptions let the agent bold a phrase or two, optionally in a
+// chosen color, from the Itinerary Builder's editor toolbar — encoded as
+// **text** or **{#rrggbb}text**. Render those markers as real <strong>
+// (with an inline color when set) instead of showing the raw asterisks.
 function BoldText({ text }) {
-  const pieces = String(text || '').split(/\*\*(.+?)\*\*/g)
-  return pieces.map((piece, i) => (i % 2 === 1 ? <strong key={i}>{piece}</strong> : piece))
+  const raw = String(text || '')
+  const regex = /\*\*(?:\{(#[0-9a-fA-F]{6})\})?(.+?)\*\*/g
+  const nodes = []
+  let last = 0
+  let m
+  let key = 0
+  while ((m = regex.exec(raw))) {
+    if (m.index > last) nodes.push(raw.slice(last, m.index))
+    nodes.push(
+      <strong key={key++} style={m[1] ? { color: m[1] } : undefined}>
+        {m[2]}
+      </strong>
+    )
+    last = m.index + m[0].length
+  }
+  if (last < raw.length) nodes.push(raw.slice(last))
+  return nodes
 }
 
 // ---------------------------------------------------------------------------

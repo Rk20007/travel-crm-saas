@@ -48,7 +48,9 @@ const TODAY_START = (() => {
 export default function StepPlan({ form, update, showErrors = false }) {
   const days = form.days || []
   const theme = form.pdfTheme || 'classic'
-  const isOcean = theme === 'ocean'
+  // Ocean Blue and Emerald Luxury both show a per-day photo in their
+  // day-wise timeline — Classic Red doesn't.
+  const supportsDayImages = theme === 'ocean' || theme === 'emerald'
   const [templates, setTemplates] = useState([])
   const [templatesLoading, setTemplatesLoading] = useState(true)
   const [templatePopoverOpen, setTemplatePopoverOpen] = useState({})
@@ -56,7 +58,9 @@ export default function StepPlan({ form, update, showErrors = false }) {
   const [gallery, setGallery] = useState([])
   const [imagePopoverOpen, setImagePopoverOpen] = useState({})
   const [uploadingIndex, setUploadingIndex] = useState(null)
+  const [boldPopoverOpen, setBoldPopoverOpen] = useState({})
   const fileInputRefs = useRef({})
+  const customColorRefs = useRef({})
   const descriptionRefs = useRef({})
 
   useEffect(() => {
@@ -68,17 +72,17 @@ export default function StepPlan({ form, update, showErrors = false }) {
       .finally(() => setTemplatesLoading(false))
   }, [])
 
-  // Only fetched when Ocean Blue is the active design — that's the only
-  // theme whose day-wise timeline shows a per-day photo.
+  // Only fetched when Ocean Blue or Emerald Luxury is the active design —
+  // those are the themes whose day-wise timeline shows a per-day photo.
   useEffect(() => {
-    if (!isOcean || gallery.length) return
+    if (!supportsDayImages || gallery.length) return
     const token = localStorage.getItem('token')
     fetch('/api/gallery', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => setGallery(d.gallery || []))
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOcean])
+  }, [supportsDayImages])
 
   const updateDay = (index, patch) => {
     let next = days.map((d, i) => (i === index ? { ...d, ...patch } : d))
@@ -100,11 +104,12 @@ export default function StepPlan({ form, update, showErrors = false }) {
     update({ days: next })
   }
 
-  // Wraps the currently selected text in the day's description with `**`
-  // markers (or unwraps it, if the selection is already exactly a bolded
-  // phrase) — the PDF and the public preview page both render these as real
-  // bold text, this is just the plain-text source of truth for it.
-  const toggleBold = (index) => {
+  // Wraps the current selection as **text** or **{#rrggbb}text** — the PDF
+  // and the public preview page both render these as real bold text (with
+  // the color, if any), this is just the plain-text source of truth for it.
+  // If the selection already sits exactly inside an existing wrapper, that
+  // wrapper is replaced instead of nesting a new one around it.
+  const applyBold = (index, color) => {
     const el = descriptionRefs.current[index]
     if (!el) return
     const { selectionStart: start, selectionEnd: end, value } = el
@@ -112,23 +117,52 @@ export default function StepPlan({ form, update, showErrors = false }) {
       toast.info('Select the text you want to bold first')
       return
     }
-    const already = value.slice(start - 2, start) === '**' && value.slice(end, end + 2) === '**'
-    let nextValue
-    let nextStart
-    let nextEnd
-    if (already) {
-      nextValue = value.slice(0, start - 2) + value.slice(start, end) + value.slice(end + 2)
-      nextStart = start - 2
-      nextEnd = end - 2
-    } else {
-      const selected = value.slice(start, end)
-      nextValue = value.slice(0, start) + `**${selected}**` + value.slice(end)
-      nextStart = start + 2
-      nextEnd = end + 2
+    let before = value.slice(0, start)
+    const selected = value.slice(start, end)
+    let after = value.slice(end)
+
+    const openMatch = before.match(/\*\*(\{#[0-9a-fA-F]{6}\})?$/)
+    const closeMatch = after.match(/^\*\*/)
+    if (openMatch && closeMatch) {
+      before = before.slice(0, before.length - openMatch[0].length)
+      after = after.slice(closeMatch[0].length)
     }
+
+    const colorPrefix = color ? `{${color}}` : ''
+    const nextValue = `${before}**${colorPrefix}${selected}**${after}`
+    const nextStart = before.length + 2 + colorPrefix.length
+    const nextEnd = nextStart + selected.length
     updateDay(index, { description: nextValue })
-    // Restore the selection after the value updates, so bolding reads as an
-    // in-place toggle instead of losing the user's place.
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(nextStart, nextEnd)
+    })
+  }
+
+  // Strips bold/color formatting off the current selection entirely.
+  const removeBold = (index) => {
+    const el = descriptionRefs.current[index]
+    if (!el) return
+    const { selectionStart: start, selectionEnd: end, value } = el
+    if (start === end) {
+      toast.info('Select the text you want to un-bold first')
+      return
+    }
+    let before = value.slice(0, start)
+    const selected = value.slice(start, end)
+    let after = value.slice(end)
+
+    const openMatch = before.match(/\*\*(\{#[0-9a-fA-F]{6}\})?$/)
+    const closeMatch = after.match(/^\*\*/)
+    if (openMatch && closeMatch) {
+      before = before.slice(0, before.length - openMatch[0].length)
+      after = after.slice(closeMatch[0].length)
+    }
+
+    const nextValue = `${before}${selected}${after}`
+    const nextStart = before.length
+    const nextEnd = nextStart + selected.length
+    updateDay(index, { description: nextValue })
     requestAnimationFrame(() => {
       el.focus()
       el.setSelectionRange(nextStart, nextEnd)
@@ -245,7 +279,7 @@ export default function StepPlan({ form, update, showErrors = false }) {
               </Button>
             )}
           </CardHeader>
-          <CardContent className={isOcean ? 'sm:grid sm:grid-cols-[1fr_190px] sm:items-start sm:gap-5' : undefined}>
+          <CardContent className={supportsDayImages ? 'sm:grid sm:grid-cols-[1fr_190px] sm:items-start sm:gap-5' : undefined}>
             <div className="space-y-5">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -394,17 +428,74 @@ export default function StepPlan({ form, update, showErrors = false }) {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold uppercase tracking-wide text-primary">Description</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-xs"
-                  onClick={() => toggleBold(index)}
-                  title="Bold the selected text"
+                <Popover
+                  open={!!boldPopoverOpen[index]}
+                  onOpenChange={(open) => setBoldPopoverOpen((s) => ({ ...s, [index]: open }))}
                 >
-                  <Bold className="h-3.5 w-3.5" />
-                  Bold
-                </Button>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      title="Bold the selected text"
+                    >
+                      <Bold className="h-3.5 w-3.5" />
+                      Bold
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-3" align="end">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Bold color</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        title="Bold (no color)"
+                        onClick={() => {
+                          applyBold(index, null)
+                          setBoldPopoverOpen((s) => ({ ...s, [index]: false }))
+                        }}
+                        className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold transition-colors hover:border-primary"
+                      >
+                        <Bold className="h-3.5 w-3.5" />
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        title="Custom color"
+                        onClick={() => customColorRefs.current[index]?.click()}
+                        className="h-9 w-9 shrink-0 rounded-full border-2 border-dashed border-border transition-colors hover:border-primary"
+                        style={{
+                          background:
+                            'conic-gradient(from 0deg, red, yellow, lime, cyan, blue, magenta, red)',
+                        }}
+                      />
+                      <input
+                        ref={(el) => {
+                          customColorRefs.current[index] = el
+                        }}
+                        type="color"
+                        className="sr-only"
+                        onChange={(e) => {
+                          applyBold(index, e.target.value)
+                          setBoldPopoverOpen((s) => ({ ...s, [index]: false }))
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full gap-1 text-xs"
+                      onClick={() => {
+                        removeBold(index)
+                        setBoldPopoverOpen((s) => ({ ...s, [index]: false }))
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                      Remove bold
+                    </Button>
+                  </PopoverContent>
+                </Popover>
               </div>
               <Textarea
                 ref={(el) => {
@@ -421,9 +512,10 @@ export default function StepPlan({ form, update, showErrors = false }) {
             </div>
             </div>
 
-            {/* Ocean Blue only — its day-wise timeline shows one photo beside
-             * each day, picked from the agency's own gallery. */}
-            {isOcean && (
+            {/* Ocean Blue / Emerald Luxury only — their day-wise timelines
+             * each show one photo beside/alongside the day, picked from the
+             * agency's own gallery. */}
+            {supportsDayImages && (
               <div className="mt-4 space-y-1.5 sm:mt-0">
                 <Label className="text-xs font-bold uppercase tracking-wide text-primary">Day photo</Label>
                 <Popover

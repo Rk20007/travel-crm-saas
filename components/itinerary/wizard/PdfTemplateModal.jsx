@@ -19,9 +19,10 @@ import { cn } from '@/lib/utils'
 import { toCompressedDataUrl } from '@/lib/imageCompress'
 import { PDF_THEME_OPTIONS } from '@/modules/itinerary/pdfThemes'
 
-/** Ocean Blue's day-wise timeline shows a photo beside every day — picked
- * here, right after choosing the theme, either from the agency's own
- * gallery or uploaded fresh from the device (laptop/phone). */
+/** Ocean Blue's and Emerald Luxury's day-wise timelines each show a photo
+ * beside every day — picked here, right after choosing the theme, either
+ * from the agency's own gallery or uploaded fresh from the device
+ * (laptop/phone). Component name kept from when only Ocean had this. */
 function OceanDayPhotos({ form, update }) {
   const days = form.days || []
   const [gallery, setGallery] = useState([])
@@ -221,9 +222,12 @@ export default function PdfTemplateModal({ open, onOpenChange, onConfirm, genera
             })}
           </div>
 
-          {/* Ocean Blue only — pick a photo for each day right here, before
-           * generating, so the PDF's day-wise timeline has them. */}
-          {selected === 'ocean' && form && update && <OceanDayPhotos form={form} update={update} />}
+          {/* Ocean Blue / Emerald Luxury only — pick a photo for each day
+           * right here, before generating, so the PDF's day-wise timeline
+           * has them. */}
+          {(selected === 'ocean' || selected === 'emerald') && form && update && (
+            <OceanDayPhotos form={form} update={update} />
+          )}
         </div>
 
         <DialogFooter>
