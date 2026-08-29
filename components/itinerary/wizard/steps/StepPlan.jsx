@@ -21,7 +21,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -45,6 +44,73 @@ const TODAY_START = (() => {
   return d
 })()
 
+// --- Rich-text <-> marker-string conversion for the day description -------
+// A plain <textarea> can't render inline bold/color, so the description is
+// edited in a contentEditable div instead — these convert between its HTML
+// and the same **text** / **{#rrggbb}text** marker string the PDF and the
+// public preview page already parse.
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function markersToHtml(text) {
+  const raw = String(text || '')
+  const regex = /\*\*(?:\{(#[0-9a-fA-F]{6})\})?(.+?)\*\*/g
+  let html = ''
+  let last = 0
+  let m
+  while ((m = regex.exec(raw))) {
+    if (m.index > last) html += escapeHtml(raw.slice(last, m.index))
+    const inner = escapeHtml(m[2])
+    html += m[1] ? `<strong style="color:${m[1]}">${inner}</strong>` : `<strong>${inner}</strong>`
+    last = m.index + m[0].length
+  }
+  if (last < raw.length) html += escapeHtml(raw.slice(last))
+  return html.replace(/\n/g, '<br>')
+}
+
+// Browsers normalize an inline `style="color:#rrggbb"` to `rgb(r, g, b)`
+// when read back via element.style.color — this converts it back to hex so
+// the stored marker matches what the color picker produced.
+function rgbToHex(colorStr) {
+  if (!colorStr) return null
+  if (colorStr.startsWith('#')) return colorStr
+  const m = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+  if (!m) return null
+  return `#${m.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`
+}
+
+function htmlToMarkers(root) {
+  let out = ''
+  const walk = (n) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      out += n.textContent
+      return
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE) return
+    const tag = n.tagName.toLowerCase()
+    if (tag === 'br') {
+      out += '\n'
+      return
+    }
+    if (tag === 'strong' || tag === 'b') {
+      const inner = n.textContent
+      if (!inner) return
+      const hex = rgbToHex(n.style?.color)
+      out += hex ? `**{${hex}}${inner}**` : `**${inner}**`
+      return
+    }
+    if (tag === 'div' || tag === 'p') {
+      if (out.length > 0 && !out.endsWith('\n')) out += '\n'
+      n.childNodes.forEach(walk)
+      return
+    }
+    n.childNodes.forEach(walk)
+  }
+  root.childNodes.forEach(walk)
+  return out
+}
+
 export default function StepPlan({ form, update, showErrors = false }) {
   const days = form.days || []
   const theme = form.pdfTheme || 'classic'
@@ -62,6 +128,31 @@ export default function StepPlan({ form, update, showErrors = false }) {
   const fileInputRefs = useRef({})
   const customColorRefs = useRef({})
   const descriptionRefs = useRef({})
+  // The selection inside a contentEditable can be cleared the moment focus
+  // moves to the Bold popover/color picker — this holds on to the last
+  // real (non-collapsed) selection made inside the editor so Bold/Remove
+  // still have something to act on.
+  const savedRangeRef = useRef({})
+  // What each editor's DOM currently reflects — lets the sync effect below
+  // tell "the user is still typing" (skip re-render) apart from "this day's
+  // description changed from elsewhere" (re-render from the marker string).
+  const lastSyncedRef = useRef({})
+
+  // Keeps each day's contentEditable in sync with form.days — but only
+  // rewrites the DOM (which would otherwise reset the cursor) when the
+  // description changed from somewhere other than the editor's own typing
+  // (a template pick, a Bold/Remove action, or the day list itself
+  // reordering) — its own onInput already updated lastSyncedRef.
+  useEffect(() => {
+    days.forEach((day, index) => {
+      const el = descriptionRefs.current[index]
+      if (!el) return
+      const text = day.description || ''
+      if (lastSyncedRef.current[index] === text) return
+      el.innerHTML = markersToHtml(text)
+      lastSyncedRef.current[index] = text
+    })
+  }, [days])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -104,69 +195,87 @@ export default function StepPlan({ form, update, showErrors = false }) {
     update({ days: next })
   }
 
-  // Wraps the current selection as **text** or **{#rrggbb}text** — the PDF
-  // and the public preview page both render these as real bold text (with
-  // the color, if any), this is just the plain-text source of truth for it.
-  // If the selection already sits exactly inside an existing wrapper, that
-  // wrapper is replaced instead of nesting a new one around it.
-  const applyBold = (index, color) => {
+  // The selection is saved on every mouseup/keyup inside the editor (see
+  // the contentEditable's handlers below) — focus moving to the Bold
+  // popover/color input can otherwise clear window.getSelection() before
+  // the click handler here even runs.
+  const saveSelection = (index) => {
+    const el = descriptionRefs.current[index]
+    const sel = window.getSelection()
+    if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    if (!el.contains(range.commonAncestorContainer)) return
+    savedRangeRef.current[index] = range.cloneRange()
+  }
+
+  // Re-reads the editor's DOM into the marker string and pushes it to
+  // form.days — used after any DOM-manipulating action (bold/unbold) below.
+  const commitDescriptionFromDom = (index) => {
     const el = descriptionRefs.current[index]
     if (!el) return
-    const { selectionStart: start, selectionEnd: end, value } = el
-    if (start === end) {
+    const text = htmlToMarkers(el)
+    lastSyncedRef.current[index] = text
+    updateDay(index, { description: text })
+  }
+
+  // Wraps the saved selection in a <strong>, colored if `color` is given —
+  // the PDF and the public preview page both parse the resulting
+  // **text**/**{#rrggbb}text** marker the same way. Re-bolding an existing
+  // bold span just changes its color instead of nesting a second <strong>.
+  const applyBold = (index, color) => {
+    const el = descriptionRefs.current[index]
+    const range = savedRangeRef.current[index]
+    if (!el || !range) {
       toast.info('Select the text you want to bold first')
       return
     }
-    let before = value.slice(0, start)
-    const selected = value.slice(start, end)
-    let after = value.slice(end)
+    el.focus()
+    const sel = window.getSelection()
+    sel.removeAllRanges()
+    sel.addRange(range)
 
-    const openMatch = before.match(/\*\*(\{#[0-9a-fA-F]{6}\})?$/)
-    const closeMatch = after.match(/^\*\*/)
-    if (openMatch && closeMatch) {
-      before = before.slice(0, before.length - openMatch[0].length)
-      after = after.slice(closeMatch[0].length)
+    const existingStrong =
+      range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer.closest?.('strong')
+        : range.startContainer.parentElement?.closest('strong')
+    let strong
+    if (existingStrong && el.contains(existingStrong) && existingStrong.textContent === range.toString()) {
+      strong = existingStrong
+    } else {
+      strong = document.createElement('strong')
+      strong.appendChild(range.extractContents())
+      range.insertNode(strong)
     }
+    strong.style.color = color || ''
 
-    const colorPrefix = color ? `{${color}}` : ''
-    const nextValue = `${before}**${colorPrefix}${selected}**${after}`
-    const nextStart = before.length + 2 + colorPrefix.length
-    const nextEnd = nextStart + selected.length
-    updateDay(index, { description: nextValue })
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(nextStart, nextEnd)
-    })
+    const newRange = document.createRange()
+    newRange.selectNodeContents(strong)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+    savedRangeRef.current[index] = newRange.cloneRange()
+
+    commitDescriptionFromDom(index)
   }
 
-  // Strips bold/color formatting off the current selection entirely.
+  // Unwraps the <strong> the saved selection sits inside (if any).
   const removeBold = (index) => {
     const el = descriptionRefs.current[index]
-    if (!el) return
-    const { selectionStart: start, selectionEnd: end, value } = el
-    if (start === end) {
+    const range = savedRangeRef.current[index]
+    if (!el || !range) {
       toast.info('Select the text you want to un-bold first')
       return
     }
-    let before = value.slice(0, start)
-    const selected = value.slice(start, end)
-    let after = value.slice(end)
-
-    const openMatch = before.match(/\*\*(\{#[0-9a-fA-F]{6}\})?$/)
-    const closeMatch = after.match(/^\*\*/)
-    if (openMatch && closeMatch) {
-      before = before.slice(0, before.length - openMatch[0].length)
-      after = after.slice(closeMatch[0].length)
+    const node = range.startContainer
+    const strong = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest('strong')
+    if (!strong || !el.contains(strong)) {
+      toast.info('That selection isn’t bold')
+      return
     }
+    const parent = strong.parentNode
+    while (strong.firstChild) parent.insertBefore(strong.firstChild, strong)
+    parent.removeChild(strong)
 
-    const nextValue = `${before}${selected}${after}`
-    const nextStart = before.length
-    const nextEnd = nextStart + selected.length
-    updateDay(index, { description: nextValue })
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(nextStart, nextEnd)
-    })
+    commitDescriptionFromDom(index)
   }
 
   const addDay = () => {
@@ -497,15 +606,28 @@ export default function StepPlan({ form, update, showErrors = false }) {
                   </PopoverContent>
                 </Popover>
               </div>
-              <Textarea
+              {/* A contentEditable, not a <textarea> — a plain textarea has
+               * no way to render the inline bold/color the Bold button
+               * applies. Its content is kept in form.days as the same
+               * marker string (bold text wrapped in double asterisks, with
+               * an optional {#hex} color prefix) via the sync effect and
+               * commitDescriptionFromDom above. */}
+              <div
                 ref={(el) => {
                   descriptionRefs.current[index] = el
                 }}
-                placeholder="Describe the day's adventure, sightseeings, and highlights..."
-                value={day.description || ''}
-                onChange={(e) => updateDay(index, { description: e.target.value })}
+                contentEditable
+                suppressContentEditableWarning
+                data-placeholder="Describe the day's adventure, sightseeings, and highlights..."
+                onInput={(e) => {
+                  const text = htmlToMarkers(e.currentTarget)
+                  lastSyncedRef.current[index] = text
+                  updateDay(index, { description: text })
+                }}
+                onMouseUp={() => saveSelection(index)}
+                onKeyUp={() => saveSelection(index)}
                 className={cn(
-                  'min-h-[110px] rounded-xl',
+                  'min-h-[110px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm',
                   descriptionMissing && 'border-destructive focus-visible:border-destructive'
                 )}
               />

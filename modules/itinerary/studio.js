@@ -305,7 +305,11 @@ export function itineraryToStudioForm(data) {
     ...DEFAULT_STUDIO_FORM,
     tripName: it.tripName || it.title || '',
     customerName: it.customerName || '',
-    leadId: it.leadId ? String(it.leadId) : '',
+    // leadId comes back populated (an object with firstName/email/etc, not a
+    // bare id) whenever the itinerary was loaded via getItineraryFull — a
+    // plain String() on that object gave the literal string "[object
+    // Object]", which then failed the ObjectId cast on save.
+    leadId: it.leadId ? String(it.leadId._id || it.leadId) : '',
     customerEmail: it.customerEmail || '',
     phone: it.phone || '',
     destination: it.destination || 'Kashmir',
