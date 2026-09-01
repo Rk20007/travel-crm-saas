@@ -2,7 +2,7 @@ import connectDB from '@/lib/mongodb'
 import Hotel from '@/models/Hotel'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import { recordAudit } from '@/lib/audit'
-import { tenantFilter } from '@/lib/tenant'
+import { tenantFilter, tenantReadFilter } from '@/lib/tenant'
 
 const OWNER_ROLES = ['admin', 'superadmin']
 
@@ -25,18 +25,27 @@ export async function GET(request) {
     const city = searchParams.get('city')?.trim()
     const includeArchived = searchParams.get('includeArchived') === '1'
 
-    const query = { ...tenantFilter(authResult.user) }
+    // tenantReadFilter (not tenantFilter) so a brand-scoped salesperson also
+    // sees workspace-wide hotels the owner added without picking a brand —
+    // otherwise those are invisible to them (see lib/tenant.js).
+    const { $or: brandOr, ...tenantScope } = tenantReadFilter(authResult.user)
+    const query = { ...tenantScope }
     if (!includeArchived) query.isArchived = false
     if (destination) query.destination = destination
     if (city) query.city = city
+    const andClauses = []
+    if (brandOr) andClauses.push({ $or: brandOr })
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { city: { $regex: search, $options: 'i' } },
-        { destination: { $regex: search, $options: 'i' } },
-        { address: { $regex: search, $options: 'i' } },
-      ]
+      andClauses.push({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { city: { $regex: search, $options: 'i' } },
+          { destination: { $regex: search, $options: 'i' } },
+          { address: { $regex: search, $options: 'i' } },
+        ],
+      })
     }
+    if (andClauses.length) query.$and = andClauses
 
     const hotels = await Hotel.find(query).sort({ destination: 1, city: 1, name: 1 }).lean()
     return Response.json({ hotels })

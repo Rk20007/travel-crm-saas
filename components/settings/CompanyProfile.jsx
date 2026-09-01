@@ -28,11 +28,100 @@ const loadImage = (src) =>
 
 const dataUrlBytes = (dataUrl) => Math.floor(((dataUrl.split(',')[1] || '').length) * 0.75)
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Statuses worth a retry — a proxy/gateway hiccup, not a real rejection.
+// Never retry a 4xx like 400/401/403/413 (except 408/429): those mean the
+// request itself was rejected and will fail again identically.
+const isRetryableStatus = (status) => status === 408 || status === 429 || status >= 500
+
+const SAVE_URL = '/api/settings/company'
+const MAX_RETRIES = 2 // up to 3 attempts total
+const RETRY_DELAY_MS = 900
+const REQUEST_TIMEOUT_MS = 20000
+
+/**
+ * PUT the company profile with real error classification instead of a
+ * blanket "Network error", plus a bounded retry for genuinely transient
+ * failures. Safe to retry: this PUT always writes the full current form as
+ * one document update (see getOrCreateCompany in the API route) — retrying
+ * re-applies the same snapshot, it never creates a second record or a
+ * duplicate charge.
+ */
+async function putCompanyProfile(payload, attempt = 0) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const retry = async (reason) => {
+    clearTimeout(timeoutId)
+    if (attempt >= MAX_RETRIES) throw reason
+    await sleep(RETRY_DELAY_MS * (attempt + 1))
+    return putCompanyProfile(payload, attempt + 1)
+  }
+
+  let res
+  try {
+    res = await fetch(SAVE_URL, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err.name === 'AbortError') {
+      console.error('[CompanyProfile] Save timed out', { url: SAVE_URL, attempt, timeoutMs: REQUEST_TIMEOUT_MS })
+      return retry(new Error('The save request timed out. Check your connection and try again.'))
+    }
+    // fetch() only ever throws a TypeError for a genuine network-level
+    // failure (DNS, connection refused/reset, offline) — an HTTP error
+    // status resolves normally instead, with res.ok === false.
+    console.error('[CompanyProfile] Network-level failure', { url: SAVE_URL, attempt, message: err.message })
+    return retry(new Error('Could not reach the server. Check your internet connection and try again.'))
+  }
+  clearTimeout(timeoutId)
+
+  const rawText = await res.text()
+  let data = null
+  try {
+    data = rawText ? JSON.parse(rawText) : null
+  } catch {
+    // A response that isn't JSON at all didn't come from our API route (it
+    // always returns Response.json(...)) — it's a reverse proxy's own error
+    // page in front of it, most commonly a 413 from a body-size limit (the
+    // logo/QR images here are base64 and can run to several hundred KB
+    // each) or a 502/504 while the app server was briefly unreachable.
+    console.error('[CompanyProfile] Non-JSON response (likely a proxy error page)', {
+      url: SAVE_URL, status: res.status, statusText: res.statusText, bodyPreview: rawText.slice(0, 300), attempt,
+    })
+    if (isRetryableStatus(res.status)) {
+      return retry(new Error(`Server error (${res.status}). Please try again.`))
+    }
+    if (res.status === 413) {
+      throw new Error('The logo or QR image is too large for the server to accept. Try a smaller image.')
+    }
+    throw new Error(`Unexpected server response (${res.status}).`)
+  }
+
+  if (!res.ok) {
+    console.error('[CompanyProfile] Save rejected', { url: SAVE_URL, status: res.status, error: data?.error, attempt })
+    if (isRetryableStatus(res.status)) {
+      return retry(new Error(data?.error || `Server error (${res.status}). Please try again.`))
+    }
+    throw new Error(data?.error || `Save failed (${res.status})`)
+  }
+
+  return data
+}
+
 /**
  * Take any image file and return a PNG data-URL that fits within maxBytes,
  * shrinking the dimensions until it does. No size limit on the input.
+ * Capped well under a typical reverse-proxy body-size limit (nginx's 1 MB
+ * default): the logo and QR scanner are both sent together in one save
+ * request, so their combined base64 size — not just one image alone — is
+ * what has to stay small enough to get through.
  */
-async function compressToPng(file, maxBytes = 600 * 1024, startDim = 1000) {
+async function compressToPng(file, maxBytes = 300 * 1024, startDim = 900) {
   const img = await loadImage(await readAsDataURL(file))
   let scale = Math.min(1, startDim / Math.max(img.width, img.height))
   let out = ''
@@ -121,7 +210,7 @@ export function CompanyProfile() {
       return
     }
     try {
-      // Any size in → auto-shrunk PNG under 600 KB out.
+      // Any size in → auto-shrunk PNG under 300 KB out.
       const dataUrl = await compressToPng(file)
       set({ [field]: dataUrl })
     } catch {
@@ -137,19 +226,10 @@ export function CompanyProfile() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/settings/company', {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Save failed')
-        return
-      }
+      await putCompanyProfile(form)
       toast.success('Company profile saved')
-    } catch {
-      toast.error('Network error')
+    } catch (err) {
+      toast.error(err.message || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -242,7 +322,7 @@ export function CompanyProfile() {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Any image — auto-resized to PNG under 600 KB. Or paste a URL below.
+            Any image — auto-resized to PNG under 300 KB. Or paste a URL below.
           </p>
           <Input
             value={form.logo?.startsWith('data:') ? '' : form.logo}

@@ -2,7 +2,7 @@ import connectDB from '@/lib/mongodb'
 import Activity from '@/models/Activity'
 import { authenticate, requireRoles } from '@/lib/middleware'
 import { recordAudit } from '@/lib/audit'
-import { tenantFilter } from '@/lib/tenant'
+import { tenantFilter, tenantReadFilter } from '@/lib/tenant'
 
 const OWNER_ROLES = ['admin', 'superadmin']
 
@@ -23,11 +23,14 @@ export async function GET(request) {
     const search = searchParams.get('search')?.trim()
     const includeArchived = searchParams.get('includeArchived') === '1'
 
-    const query = { ...tenantFilter(authResult.user) }
+    // tenantReadFilter (not tenantFilter) so a brand-scoped salesperson also
+    // sees workspace-wide activities the owner added without picking a brand
+    // (see lib/tenant.js).
+    const { $or: brandOr, ...tenantScope } = tenantReadFilter(authResult.user)
+    const query = { ...tenantScope }
     if (!includeArchived) query.isArchived = false
-    if (search) {
-      query.name = { $regex: search, $options: 'i' }
-    }
+    if (search) query.name = { $regex: search, $options: 'i' }
+    if (brandOr) query.$or = brandOr
 
     const activities = await Activity.find(query).sort({ name: 1 }).lean()
     return Response.json({ activities })
