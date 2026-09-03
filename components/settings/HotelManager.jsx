@@ -395,7 +395,11 @@ export function HotelManager() {
                           Inactive
                         </Badge>
                       )}
-                      <div className="absolute bottom-0 right-0 flex gap-1 bg-gradient-to-t from-black/50 to-transparent p-1.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                      {/* Always visible — these used to be hover-only on
+                        * desktop (md:opacity-0 …group-hover…), which made the
+                        * Edit/Delete buttons look completely absent to anyone
+                        * on a laptop who didn't happen to mouse over the card. */}
+                      <div className="absolute bottom-0 right-0 flex gap-1 bg-gradient-to-t from-black/50 to-transparent p-1.5">
                         <Button
                           size="icon"
                           variant="secondary"

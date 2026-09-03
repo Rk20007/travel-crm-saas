@@ -144,6 +144,50 @@ export default function DashboardLayout({ children }) {
     }
   }, [router])
 
+  // Keep this tab's role / active-brand in step with the DB. The silent token
+  // refresh (every ~13 min, and on tab focus) rewrites localStorage['user']
+  // with fresh values, but a tab that's just sitting open had already read the
+  // old copy into state on mount — so an owner changing someone's role or
+  // brand only showed up for that person after a manual reload / re-login.
+  // Re-reading the stored user on focus and on cross-tab storage events closes
+  // that gap; the nav-gating effect below then reacts to the new role.
+  useEffect(() => {
+    const syncUser = () => {
+      try {
+        const raw = localStorage.getItem('user')
+        if (!raw) return
+        const next = JSON.parse(raw)
+        setUser((prev) => {
+          if (
+            prev &&
+            prev.role === next.role &&
+            String(prev.activeBrandId || '') === String(next.activeBrandId || '') &&
+            String(prev.teamId || '') === String(next.teamId || '')
+          ) {
+            return prev // nothing that affects access changed — avoid a re-render
+          }
+          return next
+        })
+      } catch {
+        /* leave the current user in place */
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncUser()
+    }
+    const onStorage = (e) => {
+      if (e.key === 'user') syncUser()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
+
   useEffect(() => {
     async function loadBrands() {
       const u = user
