@@ -799,17 +799,25 @@ export default function LeadsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Remarks / Conversation notes
-                </label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="What did you discuss with the client? Requirements, budget, objections..."
-                  className="min-h-[80px]"
-                />
-              </div>
+              {/* Only when creating a lead — this captures the first bit of
+                * context. For an existing lead, all conversation notes live in
+                * the Remarks (💬) log, reachable from the leads list, which
+                * keeps a dated history instead of one overwritable box. Any
+                * note already saved on an older lead still shows (read-only) in
+                * the lead preview drawer and is never wiped by an edit. */}
+              {!editingId && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Remarks / Conversation notes
+                  </label>
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="What did you discuss with the client? Requirements, budget, objections..."
+                    className="min-h-[80px]"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium mb-1">Status</label>
@@ -898,7 +906,9 @@ export default function LeadsPage() {
                     </Select>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Remarks are taken from the “Remarks / Conversation notes” field above.
+                    {editingId
+                      ? 'Add what was discussed in the Remarks (💬) log for this lead.'
+                      : 'Remarks are taken from the “Remarks / Conversation notes” field above.'}
                   </p>
                 </div>
               )}
