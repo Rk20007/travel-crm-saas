@@ -21,6 +21,7 @@ import { Calendar, MessageSquare, Send } from 'lucide-react'
 import { format } from 'date-fns'
 import { leadDisplayName, LEAD_STATUSES } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
+import { mutateJson } from '@/lib/mutate'
 
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 const authH = () => ({ Authorization: `Bearer ${token()}` })
@@ -81,46 +82,50 @@ export function LeadRemarksDialog({ lead, open, onOpenChange, onSaved }) {
       return
     }
     setSaving(true)
+    const token = localStorage.getItem('token')
+    const statusChanged = status !== lead?.status
+    // Run the writes in order, not Promise.all — the old code fired all three
+    // at once and, if any failed, showed a bare "Failed to save" while the
+    // others had already gone through (and a retry then re-ran them). Order
+    // here is by importance: the follow-up (the thing that was going missing)
+    // first, then the status, then the timeline note as best-effort. The
+    // first two are safe to retry — /api/follow-ups always leaves exactly one
+    // pending follow-up, and a status PUT is idempotent — so mutateJson can
+    // ride out a transient blip instead of dropping the write.
     try {
-      const statusChanged = status !== lead?.status
-      const [timelineRes, leadRes, followUpRes] = await Promise.all([
-        fetch(`/api/leads/${leadId}/timeline`, {
-          method: 'POST',
-          headers: { ...authH(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'note', title: 'Remark', note: text.trim() }),
-        }),
-        statusChanged
-          ? fetch(`/api/leads/${leadId}`, {
-              method: 'PUT',
-              headers: { ...authH(), 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status }),
-            })
-          : Promise.resolve({ ok: true }),
-        needsFollowUp
-          ? fetch('/api/follow-ups', {
-              method: 'POST',
-              headers: { ...authH(), 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                leadId,
-                type: 'call',
-                scheduledDate: followUpDate,
-                description: text.trim(),
-              }),
-            })
-          : Promise.resolve({ ok: true }),
-      ])
-      if (!timelineRes.ok || !leadRes.ok || !followUpRes.ok) {
-        toast.error('Failed to save')
-        return
+      if (needsFollowUp) {
+        await mutateJson('/api/follow-ups', {
+          token,
+          body: { leadId, type: 'call', scheduledDate: followUpDate, description: text.trim() },
+        })
       }
-      toast.success('Remark saved')
-      setText('')
-      setFollowUpDate('')
-      load()
-      onSaved?.()
-    } finally {
+      if (statusChanged) {
+        await mutateJson(`/api/leads/${leadId}`, { method: 'PUT', token, body: { status } })
+      }
+    } catch (err) {
+      toast.error(err.message || 'Could not save. Please try again.')
       setSaving(false)
+      return
     }
+
+    // Timeline note: a record of the conversation, not load-bearing for the
+    // pipeline — don't fail the whole action if only this can't be written.
+    try {
+      await mutateJson(`/api/leads/${leadId}/timeline`, {
+        token,
+        retries: 0,
+        body: { type: 'note', title: 'Remark', note: text.trim() },
+      })
+    } catch (err) {
+      console.error('Timeline note write failed:', err)
+    }
+
+    toast.success('Remark saved')
+    setText('')
+    setFollowUpDate('')
+    setSaving(false)
+    load()
+    onSaved?.()
   }
 
   return (

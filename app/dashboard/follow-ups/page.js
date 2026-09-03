@@ -27,6 +27,12 @@ import { TableShell } from '@/components/crm/TableShell'
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
+import { mutateJson } from '@/lib/mutate'
+
+// A lead that's been won or shelved has no actionable follow-up — hide any
+// pending row still attached to it (a safety net for records that predate the
+// server-side cleanup, and for an instantly-correct list before the refetch).
+const RESTING_LEAD_STATUSES = new Set(['booked', 'completed'])
 
 const waLink = (phone) => `https://wa.me/${String(phone || '').replace(/\D/g, '')}`
 
@@ -158,40 +164,39 @@ function FollowUpsContent() {
     setSaving(true)
     try {
       const token = localStorage.getItem('token')
-      const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
       // "Booked" is handled the moment it's picked in the dropdown (see
       // handleEditStatusChange) — by the time Save could be clicked here the
       // status is always something else.
-      const followUpRes = await fetch(`/api/follow-ups/${editing._id}`, {
+      //
+      // Both writes go through mutateJson: a momentary network/5xx blip used
+      // to be swallowed here, so the row looked updated but the follow-up (or
+      // the lead status) never actually moved. Now it retries, and a real
+      // failure is shown instead of a false success.
+      await mutateJson(`/api/follow-ups/${editing._id}`, {
         method: 'PATCH',
-        headers: authH,
-        body: JSON.stringify({
+        token,
+        body: {
           description: editForm.description,
           ...(editNeedsFollowUp
             ? { status: 'pending', scheduledDate: editForm.scheduledDate }
             : { status: 'completed' }),
-        }),
+        },
       })
-      if (!followUpRes.ok) {
-        toast.error('Failed to update follow-up')
-        return
+
+      if (editing.leadId?._id) {
+        await mutateJson(`/api/leads/${editing.leadId._id}`, {
+          method: 'PUT',
+          token,
+          body: { status: editForm.leadStatus },
+        })
       }
 
-      const leadRes = editing.leadId?._id
-        ? await fetch(`/api/leads/${editing.leadId._id}`, {
-            method: 'PUT',
-            headers: authH,
-            body: JSON.stringify({ status: editForm.leadStatus }),
-          })
-        : { ok: true }
-      if (!leadRes.ok) {
-        toast.error('Failed to update follow-up')
-        return
-      }
       toast.success('Follow-up updated')
       setEditing(null)
       fetchFollowUps()
+    } catch (err) {
+      toast.error(err.message || 'Failed to update follow-up')
     } finally {
       setSaving(false)
     }
@@ -248,6 +253,8 @@ function FollowUpsContent() {
   // Pending instead — future-dated follow-ups show under neither until
   // their day arrives (they're visible under "All").
   const filteredFollowUps = [...latestPerLead.values()].filter((fu) => {
+    // A won/handed-off lead's pending follow-up is stale — never list it.
+    if (fu.status === 'pending' && RESTING_LEAD_STATUSES.has(fu.leadId?.status)) return false
     if (filter === 'today' && (fu.status !== 'pending' || !isToday(fu.scheduledDate))) return false
     if (filter === 'pending' && (fu.status !== 'pending' || !isPastDue(fu.scheduledDate))) return false
     const name = leadDisplayName(fu.leadId).toLowerCase()
@@ -532,14 +539,16 @@ function FollowUpsContent() {
         opsMembers={opsMembers}
         accountsMembers={accountsMembers}
         onBooked={async () => {
-          // Booking succeeded → the follow-up that led here is done; mark it
-          // completed instead of leaving it pending forever.
+          // The booking API itself now completes every pending follow-up on a
+          // booked lead (app/api/bookings/route.js), so this row is already
+          // handled server-side. This extra PATCH is just belt-and-braces for
+          // the one that opened the Book dialog — harmless if it no-ops.
           if (pendingFollowUpId) {
             const token = localStorage.getItem('token')
-            await fetch(`/api/follow-ups/${pendingFollowUpId}`, {
+            await mutateJson(`/api/follow-ups/${pendingFollowUpId}`, {
               method: 'PATCH',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'completed' }),
+              token,
+              body: { status: 'completed' },
             }).catch(() => {})
             setPendingFollowUpId(null)
           }

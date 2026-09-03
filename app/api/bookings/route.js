@@ -2,6 +2,7 @@ import connectDB from '@/lib/mongodb'
 import Booking from '@/models/Booking'
 import Lead from '@/models/Lead'
 import LeadTimeline from '@/models/LeadTimeline'
+import FollowUp from '@/models/FollowUp'
 import User from '@/models/User'
 import Itinerary from '@/models/Itinerary'
 import Payment from '@/models/Payment'
@@ -279,6 +280,16 @@ export async function POST(request) {
       await Lead.findOneAndUpdate(
         { _id: body.leadId, teamId: authResult.user.teamId },
         { status: 'booked' }
+      )
+      // The lead is booked now — any still-pending follow-up on it is done.
+      // Closing them here, at the one place every booking path goes through
+      // (Leads list, Lead detail, Follow-ups page), is what actually keeps a
+      // booked lead from lingering in the Follow-ups list; the client-side
+      // cleanup only ever covered one of those entry points and was
+      // fire-and-forget on top of that.
+      await FollowUp.updateMany(
+        { leadId: body.leadId, status: 'pending' },
+        { $set: { status: 'completed', completedAt: new Date() } }
       )
       await LeadTimeline.create({
         leadId: body.leadId,

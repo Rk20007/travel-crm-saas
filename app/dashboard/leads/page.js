@@ -20,6 +20,7 @@ import { LeadItinerariesDialog } from '@/components/crm/LeadItinerariesDialog'
 import { LeadRemarksDialog } from '@/components/crm/LeadRemarksDialog'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
+import { mutateJson } from '@/lib/mutate'
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([])
@@ -275,39 +276,53 @@ export default function LeadsPage() {
       }
 
       const newLead = data.lead || data
-      // Schedule a follow-up when a lost lead has a next follow-up date.
+
+      // Schedule the follow-up that goes with this status change. This used to
+      // be a fire-and-forget `fetch(...).catch(() => {})` — a momentary blip
+      // meant the lead saved, the toast said "updated", but no follow-up was
+      // ever created and it silently fell off the sales person's list. Now it
+      // retries, and if it genuinely can't be saved the user is told exactly
+      // that (the lead change itself is already persisted).
+      const u = JSON.parse(localStorage.getItem('user') || '{}')
+      const followUpAssignee =
+        u.id || u.userId || u._id || newLead?.assignedTo?._id || newLead?.assignedTo
+      let followUpSpec = null
       if (formData.status === 'lost' && formData.nextFollowUpAt && newLead?._id) {
-        const u = JSON.parse(localStorage.getItem('user') || '{}')
-        await fetch('/api/follow-ups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            leadId: newLead._id,
-            assignedTo: u.id || u.userId || u._id || newLead.assignedTo?._id || newLead.assignedTo,
-            type: formData.followUpType,
-            scheduledDate: formData.nextFollowUpAt,
-            description: formData.notes || `Lost lead follow-up (${formData.lostReason || 'no reason'})`,
-          }),
-        }).catch(() => {})
+        followUpSpec = {
+          type: formData.followUpType,
+          scheduledDate: formData.nextFollowUpAt,
+          description: formData.notes || `Lost lead follow-up (${formData.lostReason || 'no reason'})`,
+        }
+      } else if (needsGenericFollowUp && formData.followUpDate && newLead?._id) {
+        // Any status the owner flagged "Requires follow-up" (Settings → Lead
+        // Statuses), just with a plain date instead of Lost's reason/type.
+        followUpSpec = {
+          type: 'call',
+          scheduledDate: formData.followUpDate,
+          description: formData.notes || `Follow-up for ${selectedStatusOption?.label || formData.status}`,
+        }
       }
-      // Any other status the owner flagged "Requires follow-up" (Settings →
-      // Lead Statuses) works the same way, just with a plain date instead of
-      // Lost's reason/type fields.
-      if (needsGenericFollowUp && formData.followUpDate && newLead?._id) {
-        const u = JSON.parse(localStorage.getItem('user') || '{}')
-        await fetch('/api/follow-ups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            leadId: newLead._id,
-            assignedTo: u.id || u.userId || u._id || newLead.assignedTo?._id || newLead.assignedTo,
-            type: 'call',
-            scheduledDate: formData.followUpDate,
-            description: formData.notes || `Follow-up for ${selectedStatusOption?.label || formData.status}`,
-          }),
-        }).catch(() => {})
+
+      let followUpFailed = false
+      if (followUpSpec) {
+        try {
+          await mutateJson('/api/follow-ups', {
+            token,
+            body: { leadId: newLead._id, assignedTo: followUpAssignee, ...followUpSpec },
+          })
+        } catch (err) {
+          console.error('Follow-up creation failed:', err)
+          followUpFailed = true
+        }
       }
-      toast.success(editingId ? 'Lead updated' : 'Lead created')
+
+      if (followUpFailed) {
+        toast.error(
+          'Lead saved, but the follow-up could not be scheduled. Open the lead and add it from the Remarks (💬) log.'
+        )
+      } else {
+        toast.success(editingId ? 'Lead updated' : 'Lead created')
+      }
       fetchLeads()
       fetchStatusCounts()
       setShowModal(false)

@@ -122,13 +122,24 @@ export async function PUT(request, { params }) {
     await lead.save()
     await lead.populate('assignedTo', 'name email')
 
-    // Reverting a lead back to "New" means it's effectively un-contacted again —
-    // any follow-ups scheduled while it was further along are no longer valid,
-    // so cancel them instead of leaving stale pending reminders behind.
-    if (statusChanged && lead.status === 'new') {
+    // Follow-ups are only actionable while a lead is still in play. Once the
+    // status moves to a resting point, any still-pending follow-up on it must
+    // be closed so it stops showing on the Follow-ups list:
+    //  - back to "new"  → the lead is un-contacted again, the old plan is
+    //    void → cancel.
+    //  - "booked" / "completed" → the lead is won and handed off → complete.
+    // "lost" is deliberately excluded: the lost-lead flow schedules its own
+    // fresh follow-up right after this, and /api/follow-ups supersedes the
+    // stale pending ones itself when it does.
+    if (statusChanged && ['new', 'booked', 'completed'].includes(lead.status)) {
       await FollowUp.updateMany(
         { leadId: lead._id, status: 'pending' },
-        { $set: { status: 'cancelled' } }
+        {
+          $set: {
+            status: lead.status === 'new' ? 'cancelled' : 'completed',
+            ...(lead.status === 'new' ? {} : { completedAt: new Date() }),
+          },
+        }
       )
     }
 
