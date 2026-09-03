@@ -21,6 +21,7 @@ import { LeadRemarksDialog } from '@/components/crm/LeadRemarksDialog'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
+import { pickerToIso } from '@/lib/datetime'
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([])
@@ -290,7 +291,7 @@ export default function LeadsPage() {
       if (formData.status === 'lost' && formData.nextFollowUpAt && newLead?._id) {
         followUpSpec = {
           type: formData.followUpType,
-          scheduledDate: formData.nextFollowUpAt,
+          scheduledDate: pickerToIso(formData.nextFollowUpAt),
           description: formData.notes || `Lost lead follow-up (${formData.lostReason || 'no reason'})`,
         }
       } else if (needsGenericFollowUp && formData.followUpDate && newLead?._id) {
@@ -298,7 +299,7 @@ export default function LeadsPage() {
         // Statuses), just with a plain date instead of Lost's reason/type.
         followUpSpec = {
           type: 'call',
-          scheduledDate: formData.followUpDate,
+          scheduledDate: pickerToIso(formData.followUpDate),
           description: formData.notes || `Follow-up for ${selectedStatusOption?.label || formData.status}`,
         }
       }

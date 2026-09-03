@@ -22,6 +22,7 @@ import { format } from 'date-fns'
 import { leadDisplayName, LEAD_STATUSES } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
+import { pickerToIso } from '@/lib/datetime'
 
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 const authH = () => ({ Authorization: `Bearer ${token()}` })
@@ -96,7 +97,7 @@ export function LeadRemarksDialog({ lead, open, onOpenChange, onSaved }) {
       if (needsFollowUp) {
         await mutateJson('/api/follow-ups', {
           token,
-          body: { leadId, type: 'call', scheduledDate: followUpDate, description: text.trim() },
+          body: { leadId, type: 'call', scheduledDate: pickerToIso(followUpDate), description: text.trim() },
         })
       }
       if (statusChanged) {

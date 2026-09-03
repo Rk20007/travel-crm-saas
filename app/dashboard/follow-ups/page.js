@@ -28,6 +28,7 @@ import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
+import { pickerToIso } from '@/lib/datetime'
 
 // A lead that's been won or shelved has no actionable follow-up — hide any
 // pending row still attached to it (a safety net for records that predate the
@@ -179,7 +180,7 @@ function FollowUpsContent() {
         body: {
           description: editForm.description,
           ...(editNeedsFollowUp
-            ? { status: 'pending', scheduledDate: editForm.scheduledDate }
+            ? { status: 'pending', scheduledDate: pickerToIso(editForm.scheduledDate) }
             : { status: 'completed' }),
         },
       })
@@ -252,14 +253,24 @@ function FollowUpsContent() {
   // passes without being actioned, it drops out of Today and appears under
   // Pending instead — future-dated follow-ups show under neither until
   // their day arrives (they're visible under "All").
-  const filteredFollowUps = [...latestPerLead.values()].filter((fu) => {
+  const matchesSearch = (fu) => {
+    const name = leadDisplayName(fu.leadId).toLowerCase()
+    const q = searchTerm.toLowerCase()
+    return name.includes(q) || fu.type?.toLowerCase().includes(q)
+  }
+  const visibleFollowUps = [...latestPerLead.values()].filter(
     // A won/handed-off lead's pending follow-up is stale — never list it.
-    if (fu.status === 'pending' && RESTING_LEAD_STATUSES.has(fu.leadId?.status)) return false
+    (fu) => !(fu.status === 'pending' && RESTING_LEAD_STATUSES.has(fu.leadId?.status))
+  )
+  const filteredFollowUps = visibleFollowUps.filter((fu) => {
     if (filter === 'today' && (fu.status !== 'pending' || !isToday(fu.scheduledDate))) return false
     if (filter === 'pending' && (fu.status !== 'pending' || !isPastDue(fu.scheduledDate))) return false
-    const name = leadDisplayName(fu.leadId).toLowerCase()
-    return name.includes(searchTerm.toLowerCase()) || fu.type?.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch(fu)
   })
+  // How many exist regardless of the today/pending bucket — so an empty
+  // "Today" view can say "you have N under All" instead of a flat "none",
+  // which looked like a just-created follow-up had vanished.
+  const totalUnderAll = visibleFollowUps.filter(matchesSearch).length
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
@@ -301,8 +312,19 @@ function FollowUpsContent() {
             <p className="text-muted-foreground">Loading follow-ups...</p>
           </div>
         ) : filteredFollowUps.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-muted-foreground">No follow-ups found</p>
+          <div className="space-y-3 p-8 text-center">
+            <p className="text-muted-foreground">
+              {filter === 'today'
+                ? 'No follow-ups scheduled for today'
+                : filter === 'pending'
+                  ? 'No overdue follow-ups'
+                  : 'No follow-ups found'}
+            </p>
+            {filter !== 'all' && totalUnderAll > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
+                View all {totalUnderAll} follow-up{totalUnderAll > 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         ) : (
         <>

@@ -31,6 +31,7 @@ import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
+import { pickerToIso } from '@/lib/datetime'
 
 export default function LeadDetailPage({ params }) {
   const { id } = use(params)
@@ -168,7 +169,7 @@ export default function LeadDetailPage({ params }) {
               leadId: id,
               assignedTo: user?.id || user?.userId || user?._id,
               type: lostForm.followUpType,
-              scheduledDate: lostForm.nextFollowUpAt,
+              scheduledDate: pickerToIso(lostForm.nextFollowUpAt),
               description:
                 lostForm.remarks || `Lost lead follow-up (${lostForm.lostReason || 'no reason'})`,
             },
