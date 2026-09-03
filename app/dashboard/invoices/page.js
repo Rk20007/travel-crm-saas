@@ -31,6 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/mutate'
 import { formatInr } from '@/utils/crm'
 import { TableShell } from '@/components/crm/TableShell'
 
@@ -178,33 +179,33 @@ function InvoicesPageInner() {
     }
     const token = localStorage.getItem('token')
     const selected = bookings.find((b) => String(b._id) === form.bookingId)
-    const res = await fetch('/api/invoices', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bookingId: form.bookingId,
-        leadId: selected?.leadId?._id || selected?.leadId,
-        clientName: form.clientName,
-        clientEmail: form.clientEmail,
-        clientPhone: form.clientPhone,
-        subtotal,
-        taxRate: Number(form.gstRate) || 0,
-        dueDate: isFinal ? new Date().toISOString().slice(0, 10) : form.dueDate,
-        invoiceType: form.invoiceType,
-        amountPaid: isAdvanceLike ? subtotal : 0,
-        items: [
-          {
-            description: isAdvanceLike ? 'Payment received' : isFinal ? 'Final payment' : 'Travel package',
-            quantity: 1,
-            rate: subtotal,
-            amount: subtotal,
-          },
-        ],
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed to create invoice')
+    let data
+    try {
+      data = await mutateJson('/api/invoices', {
+        token,
+        body: {
+          bookingId: form.bookingId,
+          leadId: selected?.leadId?._id || selected?.leadId,
+          clientName: form.clientName,
+          clientEmail: form.clientEmail,
+          clientPhone: form.clientPhone,
+          subtotal,
+          taxRate: Number(form.gstRate) || 0,
+          dueDate: isFinal ? new Date().toISOString().slice(0, 10) : form.dueDate,
+          invoiceType: form.invoiceType,
+          amountPaid: isAdvanceLike ? subtotal : 0,
+          items: [
+            {
+              description: isAdvanceLike ? 'Payment received' : isFinal ? 'Final payment' : 'Travel package',
+              quantity: 1,
+              rate: subtotal,
+              amount: subtotal,
+            },
+          ],
+        },
+      })
+    } catch (e) {
+      toast.error(e.message || 'Failed to create invoice')
       return
     }
     toast.success('Invoice created')

@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog'
 import { AlertCircle, KeyRound, Loader2, UserPlus, Scale } from 'lucide-react'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/mutate'
 import { PageHeader } from '@/components/crm/PageHeader'
 import { TableShell } from '@/components/crm/TableShell'
 import { MetaLeadSync } from '@/components/crm/MetaLeadSync'
@@ -102,67 +103,54 @@ export default function AdminPage() {
   }, [])
 
   const updateUser = async (userId, patch) => {
-    const res = await fetch('/api/admin/users', {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, ...patch }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Update failed')
-      return
+    try {
+      await mutateJson('/api/admin/users', {
+        method: 'PATCH',
+        token: token(),
+        body: { userId, ...patch },
+      })
+      toast.success('Updated')
+      fetchAll()
+    } catch (e) {
+      toast.error(e.message || 'Update failed')
     }
-    toast.success('Updated')
-    fetchAll()
   }
 
   const addEmployee = async () => {
-    const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed to add employee')
-      return
+    try {
+      const data = await mutateJson('/api/admin/users', { token: token(), body: newUser })
+      toast.success(data.message || 'Employee added')
+      setAddOpen(false)
+      setNewUser({ name: '', email: '', password: '', role: 'agent', leadAssignmentWeight: 1 })
+      fetchAll()
+    } catch (e) {
+      toast.error(e.message || 'Failed to add employee')
     }
-    toast.success(data.message || 'Employee added')
-    setAddOpen(false)
-    setNewUser({ name: '', email: '', password: '', role: 'agent', leadAssignmentWeight: 1 })
-    fetchAll()
   }
 
   const saveWeights = async () => {
-    const res = await fetch('/api/admin/lead-weights', {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        weights: weights.map((w) => ({ userId: w._id, weight: w.leadAssignmentWeight })),
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed to save weights')
-      return
+    try {
+      await mutateJson('/api/admin/lead-weights', {
+        method: 'PATCH',
+        token: token(),
+        body: { weights: weights.map((w) => ({ userId: w._id, weight: w.leadAssignmentWeight })) },
+      })
+      toast.success('Lead distribution weights saved')
+      fetchAll()
+    } catch (e) {
+      toast.error(e.message || 'Failed to save weights')
     }
-    toast.success('Lead distribution weights saved')
-    fetchAll()
   }
 
   const removeEmployee = async (userId) => {
     if (!confirm('Remove this employee? They will be deactivated.')) return
-    const res = await fetch(`/api/admin/users?userId=${userId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token()}` },
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed')
-      return
+    try {
+      await mutateJson(`/api/admin/users?userId=${userId}`, { method: 'DELETE', token: token() })
+      toast.success('Employee removed')
+      fetchAll()
+    } catch (e) {
+      toast.error(e.message || 'Failed to remove employee')
     }
-    toast.success('Employee removed')
-    fetchAll()
   }
 
   return (

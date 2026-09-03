@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/mutate'
 import { FileCheck, Hotel, Car, MapPin, BedDouble, Calendar, IndianRupee, Route, X } from 'lucide-react'
 
 function formatDate(d) {
@@ -329,14 +330,14 @@ function VouchersPageContent() {
     } catch {
       details = { notes: form.details }
     }
-    const res = await fetch('/api/vouchers', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookingId: form.bookingId, type: form.type, details }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed')
+    let data
+    try {
+      data = await mutateJson('/api/vouchers', {
+        token,
+        body: { bookingId: form.bookingId, type: form.type, details },
+      })
+    } catch (e) {
+      toast.error(e.message || 'Failed to generate voucher')
       return
     }
     toast.success('Voucher generated')

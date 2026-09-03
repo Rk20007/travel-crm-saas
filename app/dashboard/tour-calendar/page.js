@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, ChevronLeft, ChevronRight, MapPin, Users, DollarSign, Calendar, Edit, Trash2, Eye } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/crm/PageHeader'
+import { mutateJson } from '@/lib/mutate'
 
 export default function TourCalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -46,22 +48,33 @@ export default function TourCalendarPage() {
   }, [])
 
   const createTour = async () => {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/tours', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tourName: tourForm.tourName,
-        destination: tourForm.destination,
-        startDate: tourForm.startDate,
-        endDate: tourForm.endDate,
-        price: Number(tourForm.price),
-      }),
-    })
-    if (res.ok) {
+    if (!tourForm.tourName.trim() || !tourForm.destination.trim()) {
+      toast.error('Tour name and destination are required')
+      return
+    }
+    if (!tourForm.startDate || !tourForm.endDate) {
+      toast.error('Select start and end dates')
+      return
+    }
+    try {
+      // Was `if (res.ok) { ... }` with no else — a failed create just silently
+      // did nothing, leaving the dialog open with no hint why.
+      await mutateJson('/api/tours', {
+        token: localStorage.getItem('token'),
+        body: {
+          tourName: tourForm.tourName,
+          destination: tourForm.destination,
+          startDate: tourForm.startDate,
+          endDate: tourForm.endDate,
+          price: Number(tourForm.price),
+        },
+      })
+      toast.success('Tour added')
       setShowNewTourDialog(false)
       setTourForm({ tourName: '', destination: '', startDate: '', endDate: '', price: '' })
       fetchTours()
+    } catch (e) {
+      toast.error(e.message || 'Could not add the tour')
     }
   }
 

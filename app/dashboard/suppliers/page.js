@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/mutate'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -53,21 +54,18 @@ export default function SuppliersPage() {
       toast.error('Name and email required')
       return
     }
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/suppliers', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, type: 'hotel' }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error || 'Failed')
-      return
+    try {
+      await mutateJson('/api/suppliers', {
+        token: localStorage.getItem('token'),
+        body: { ...form, type: 'hotel' },
+      })
+      toast.success('Supplier added')
+      setOpen(false)
+      setForm({ name: '', email: '', phone: '' })
+      load()
+    } catch (e) {
+      toast.error(e.message || 'Failed to add')
     }
-    toast.success('Supplier added')
-    setOpen(false)
-    setForm({ name: '', email: '', phone: '' })
-    load()
   }
 
   return (

@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
+import { mutateJson } from '@/lib/mutate'
 
 export default function LeadDetailPage({ params }) {
   const { id } = use(params)
@@ -156,18 +157,28 @@ export default function LeadDetailPage({ params }) {
         return
       }
       // Also schedule a follow-up so it surfaces in the Follow-ups module.
+      // Retried + surfaced rather than fire-and-forget — a dropped request
+      // here used to leave the lead marked Lost with no follow-up ever
+      // created, and nothing told the user.
       if (lostForm.nextFollowUpAt) {
-        await fetch('/api/follow-ups', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            leadId: id,
-            assignedTo: user?.id || user?.userId || user?._id,
-            type: lostForm.followUpType,
-            scheduledDate: lostForm.nextFollowUpAt,
-            description: lostForm.remarks || `Lost lead follow-up (${lostForm.lostReason || 'no reason'})`,
-          }),
-        }).catch(() => {})
+        try {
+          await mutateJson('/api/follow-ups', {
+            token: token(),
+            body: {
+              leadId: id,
+              assignedTo: user?.id || user?.userId || user?._id,
+              type: lostForm.followUpType,
+              scheduledDate: lostForm.nextFollowUpAt,
+              description:
+                lostForm.remarks || `Lost lead follow-up (${lostForm.lostReason || 'no reason'})`,
+            },
+          })
+        } catch (err) {
+          console.error('Lost follow-up creation failed:', err)
+          toast.error('Lead marked Lost, but the follow-up could not be scheduled — try adding it again.')
+          loadAll()
+          return
+        }
       }
       toast.success('Lost follow-up saved')
       loadAll()
