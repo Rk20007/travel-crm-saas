@@ -36,6 +36,11 @@ export default function StepDetails({ form, update }) {
   const [leadsLoading, setLeadsLoading] = useState(true)
   const [leadPopoverOpen, setLeadPopoverOpen] = useState(false)
   const { options: destinationOptions } = useMasters('destination', DESTINATION_FALLBACK)
+  // Was reading a hardcoded 5-item list (lib/data/masterRepository.js)
+  // instead of the live master — anything the owner added/renamed in
+  // Settings → Package Categories (STANDARD, BUDGET, DELUXE, …) never showed
+  // up here, no matter how many were added.
+  const { options: packageCategoryOptions } = useMasters('package_category', PACKAGE_CATEGORIES)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -167,9 +172,9 @@ export default function StepDetails({ form, update }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PACKAGE_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
+              {packageCategoryOptions.map((c) => (
+                <SelectItem key={c.key} value={c.label}>
+                  {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
