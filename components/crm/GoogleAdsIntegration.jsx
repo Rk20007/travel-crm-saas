@@ -251,12 +251,9 @@ export function GoogleAdsIntegration() {
               <span>
                 {unmappedCount}
                 {unmappedCount === 50 ? '+' : ''} Google lead{unmappedCount > 1 ? 's' : ''} arrived with no
-                campaign/form/landing-page mapping — created as{' '}
-                <strong>Unassigned</strong> (never lost, never guessed). Add a mapping below, or open{' '}
-                <a href="/dashboard/leads?status=new" className="underline">
-                  Leads
-                </a>{' '}
-                and assign them manually.
+                campaign/form/landing-page mapping — still created and round-robin assigned like any other
+                lead, just without a specific owner picked here. Add a mapping below if these should always
+                go to one particular person/company.
               </span>
             </div>
           )}
@@ -363,8 +360,8 @@ export function GoogleAdsIntegration() {
             </div>
             {mappings.length === 0 ? (
               <p className="rounded border border-dashed p-4 text-center text-xs text-muted-foreground">
-                No mappings yet — leads with no match are created Unassigned (see the CRM's unassigned
-                view) rather than dropped.
+                No mappings yet — leads are still created and round-robin assigned like any other lead.
+                Add a mapping to route a specific campaign/form/landing page to one Company/Owner instead.
               </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border">

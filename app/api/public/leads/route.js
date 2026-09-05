@@ -113,12 +113,10 @@ export async function POST(request) {
           externalId,
           assignedTo: mapping?.ownerId || undefined,
           brandId: mapping?.brandId || undefined,
-          // No mapping found → stays genuinely unassigned, never round-robin'd
-          // as a guess (spec: "DO NOT randomly assign the lead" when unmapped)
-          // — it's still created, just visible as unassigned/pending, and the
-          // GoogleLeadEvent logged below (status 'unmapped') is what surfaces
-          // it to an admin.
-          autoAssign: false,
+          // A mapping's owner always wins; with no mapping, fall back to the
+          // same weighted round-robin every other lead source uses, same as
+          // the webhook path — never left sitting unassigned.
+          autoAssign: !mapping,
           metadata: { google: { sourceType: 'google_landing_page', ...attribution } },
         },
       })

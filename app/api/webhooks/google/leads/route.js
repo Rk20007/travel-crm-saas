@@ -85,10 +85,12 @@ export async function POST(request) {
         // only ever come from the server-resolved mapping, if any.
         assignedTo: mapping?.ownerId || undefined,
         brandId: mapping?.brandId || undefined,
-        // No mapping found → stays genuinely unassigned rather than a
-        // round-robin guess (spec: never randomly assign an unmapped lead) —
-        // logEvent() below (status 'unmapped') is what surfaces it to an admin.
-        autoAssign: false,
+        // A mapping's owner always wins; with no mapping at all, fall back to
+        // the same weighted round-robin every other lead source uses — a
+        // Google lead should never just sit unassigned waiting for someone to
+        // notice. logEvent() below still records 'unmapped' so it's visible
+        // which leads came in without a specific campaign/form match.
+        autoAssign: !mapping,
         metadata: {
           google: {
             sourceType: 'google_lead_form',
