@@ -34,6 +34,7 @@ import { mutateJson } from '@/lib/mutate'
 import { PageHeader } from '@/components/crm/PageHeader'
 import { TableShell } from '@/components/crm/TableShell'
 import { MetaLeadSync } from '@/components/crm/MetaLeadSync'
+import { GoogleAdsIntegration } from '@/components/crm/GoogleAdsIntegration'
 
 const ROLES = [
   { value: 'agent', label: 'Sales Employee' },
@@ -174,6 +175,7 @@ export default function AdminPage() {
       )}
 
       <MetaLeadSync />
+      <GoogleAdsIntegration />
 
       <Card>
         <CardHeader>

@@ -1,11 +1,22 @@
+import crypto from 'crypto'
 import connectDB from '@/lib/mongodb'
 import Team from '@/models/Team'
 import { hashInboundApiKey } from '@/lib/workspaceApiKey'
 import { rateLimit } from '@/lib/rate-limit'
 import { ingestLead } from '@/lib/leadIngest'
+import { sanitizeAttribution } from '@/lib/googleLeadParser'
+import { resolveGoogleMapping } from '@/lib/googleLeadMapping'
+import GoogleLeadEvent from '@/models/GoogleLeadEvent'
 
 /**
  * Public lead ingest API — agencies connect Meta/Zapier/website forms here.
+ * Also the intake point for Google Ads → Landing Page / Website leads: when
+ * the body carries gclid, a utm_ field, form_id, or landing_page_id (a
+ * landing page's form posting here directly, or via a light client-side
+ * relay), those are
+ * captured and a campaign/form → owner mapping is resolved server-side —
+ * additive to the existing behavior below, never overriding it for callers
+ * that don't send Google fields.
  *
  * POST /api/public/leads
  * Headers: x-api-key: crm_xxxx (mint from Dashboard → Team & Weights → Generate Key)
@@ -22,6 +33,15 @@ import { ingestLead } from '@/lib/leadIngest'
  *   "source": "facebook_ads",
  *   "externalId": "meta_lead_123",
  *   "autoAssign": true
+ * }
+ *
+ * Google Ads landing-page example (additive fields):
+ * {
+ *   "firstName": "Rahul", "phone": "9876543210",
+ *   "source": "google_ads",
+ *   "gclid": "Cj0KCQ...", "utm_source": "google", "utm_medium": "cpc",
+ *   "utm_campaign": "kashmir-2026", "form_id": "FORM-009",
+ *   "landing_page_id": "LP-KASHMIR-01", "page_url": "https://...", "referrer": "https://..."
  * }
  */
 export async function POST(request) {
@@ -54,6 +74,82 @@ export async function POST(request) {
     }
 
     const body = await request.json()
+
+    // Google Ads → Landing Page / Website: detected by an explicit source or
+    // by the presence of Google-only fields, so an ordinary website/API
+    // caller that never sends these is completely unaffected.
+    const isGoogle =
+      body.source === 'google_ads' ||
+      !!(body.gclid || body.utm_source || body.form_id || body.landing_page_id)
+
+    if (isGoogle) {
+      const attribution = sanitizeAttribution(body)
+      // No natural id from a plain form post — derive a stable one from
+      // whatever's actually present, so a double-submit (double click,
+      // client retry) can't create two leads. An explicit client-supplied
+      // externalId always wins when given.
+      const externalId =
+        body.externalId ||
+        crypto
+          .createHash('sha256')
+          .update(
+            [attribution.gclid, attribution.formId, body.email, body.phone, attribution.submittedAt.slice(0, 10)]
+              .filter(Boolean)
+              .join('|')
+          )
+          .digest('hex')
+
+      const mapping = await resolveGoogleMapping({
+        teamId: team._id,
+        formId: attribution.formId,
+        landingPageId: attribution.landingPageId,
+      })
+
+      const result = await ingestLead({
+        teamId: team._id,
+        channel: 'google',
+        body: {
+          ...body,
+          externalId,
+          assignedTo: mapping?.ownerId || undefined,
+          brandId: mapping?.brandId || undefined,
+          // No mapping found → stays genuinely unassigned, never round-robin'd
+          // as a guess (spec: "DO NOT randomly assign the lead" when unmapped)
+          // — it's still created, just visible as unassigned/pending, and the
+          // GoogleLeadEvent logged below (status 'unmapped') is what surfaces
+          // it to an admin.
+          autoAssign: false,
+          metadata: { google: { sourceType: 'google_landing_page', ...attribution } },
+        },
+      })
+
+      await GoogleLeadEvent.create({
+        teamId: team._id,
+        source: 'google_landing_page',
+        googleSubmissionId: externalId,
+        formId: attribution.formId,
+        landingPageId: attribution.landingPageId,
+        status: result.error ? 'error' : result.duplicate ? 'duplicate' : mapping ? 'processed' : 'unmapped',
+        leadId: result.leadId,
+        error: result.error,
+        rawPayload: body,
+      }).catch(() => {})
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: result.status })
+      }
+      return Response.json(
+        {
+          message: result.message,
+          leadId: result.leadId,
+          assignedTo: result.lead?.assignedTo?._id || result.lead?.assignedTo,
+          duplicate: result.duplicate || false,
+          mapped: !!mapping,
+        },
+        { status: result.status }
+      )
+    }
+
     const channel = body.source === 'facebook_ads' || body.source === 'instagram' ? 'meta' : 'api'
 
     const result = await ingestLead({

@@ -110,6 +110,15 @@ const teamSchema = new mongoose.Schema(
     metaPageId: { type: String, sparse: true },
 
     /**
+     * Google Ads Lead Form "Webhook" delivery — Google POSTs a shared secret
+     * (`google_key`) in every submission instead of a page id; this is that
+     * secret, doubling as the routing key (mirrors metaPageId's role for
+     * Meta). Set once in the Google Ads integration settings UI and pasted
+     * into the Lead Form asset's webhook config in Google Ads.
+     */
+    googleLeadFormKey: { type: String, sparse: true, unique: true },
+
+    /**
      * Meta Lead Ads *pull* sync. The webhook above needs Meta to be configured
      * to call us; this is the opposite direction — the agency pastes a form ID
      * and a page access token, and the CRM polls the Graph API for new leads.

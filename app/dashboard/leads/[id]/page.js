@@ -394,6 +394,42 @@ export default function LeadDetailPage({ params }) {
           </CardContent>
         </Card>
 
+        {lead.metadata?.google && (
+          <Card className="border-border/60 shadow-sm lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="text-base">Google Ads</CardTitle>
+              <CardDescription>
+                {lead.metadata.google.sourceType === 'google_lead_form' ? 'Lead Form' : 'Landing Page / Website'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {[
+                ['Campaign', lead.metadata.google.campaignName],
+                ['Ad Group', lead.metadata.google.adGroupId],
+                ['Ad / Asset', lead.metadata.google.adId],
+                ['Lead Form', lead.metadata.google.formId],
+                ['GCLID', lead.metadata.google.gclid],
+                ['UTM Source', lead.metadata.google.utmSource],
+                ['UTM Medium', lead.metadata.google.utmMedium],
+                ['UTM Campaign', lead.metadata.google.utmCampaign],
+                ['UTM Term', lead.metadata.google.utmTerm],
+                ['UTM Content', lead.metadata.google.utmContent],
+                ['Landing Page', lead.metadata.google.landingPageUrl || lead.metadata.google.landingPageId],
+              ]
+                // Only ever show fields that actually have a value.
+                .filter(([, v]) => v)
+                .map(([label, value]) => (
+                  <div key={label} className="flex items-start justify-between gap-3">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="max-w-[65%] truncate text-right font-mono text-xs" title={String(value)}>
+                      {value}
+                    </span>
+                  </div>
+                ))}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border-border/60 shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Activity timeline</CardTitle>

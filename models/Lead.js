@@ -36,7 +36,7 @@ const leadSchema = new mongoose.Schema(
     },
     ingestChannel: {
       type: String,
-      enum: ['manual', 'api', 'meta', 'website'],
+      enum: ['manual', 'api', 'meta', 'website', 'google'],
       default: 'manual',
     },
     destinationPreference: [String],
