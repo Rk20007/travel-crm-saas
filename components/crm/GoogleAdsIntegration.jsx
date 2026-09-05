@@ -225,7 +225,11 @@ export function GoogleAdsIntegration() {
 
   if (!status) return null
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  // These URLs get pasted straight into Google Ads — always the real
+  // production domain, never wherever this page happens to be open (e.g.
+  // localhost while testing), or Google would end up webhook-ing localhost.
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
 
   return (
     <>
