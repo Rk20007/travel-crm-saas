@@ -223,7 +223,7 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <div className="grid gap-2 sm:grid-cols-4">
+                    <div className="grid gap-2 sm:grid-cols-5">
                       <div className="space-y-1 sm:col-span-2">
                         <Label className="text-xs">Room Type</Label>
                         <Select
@@ -250,6 +250,20 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Price/night (₹)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="0"
+                          value={line.pricePerNight ?? ''}
+                          onChange={(e) =>
+                            updateRoomLine(stay, li, {
+                              pricePerNight: e.target.value === '' ? '' : Number(e.target.value) || 0,
+                            })
+                          }
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">No. of Rooms</Label>
