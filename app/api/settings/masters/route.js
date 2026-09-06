@@ -70,6 +70,33 @@ export async function POST(request) {
 
     const exists = await SettingOption.findOne({ teamId, category, key })
     if (exists) {
+      // A "deleted" system default was really only archived (see DELETE
+      // below) — the record, and its key, are still sitting in the DB. Typing
+      // the same label back in reads to the owner as "re-add", not "restore
+      // a hidden record", so make it act that way: revive it with whatever
+      // was just submitted instead of a confusing permanent "already exists".
+      if (exists.isArchived) {
+        exists.isArchived = false
+        exists.isActive = body.isActive !== false
+        exists.label = label.trim()
+        exists.description = body.description
+        exists.color = body.color || exists.color || '#64748b'
+        exists.icon = body.icon ?? exists.icon
+        exists.updatedBy = authResult.user.userId
+        await exists.save()
+
+        await recordAudit({
+          teamId,
+          entity: 'setting_option',
+          entityCategory: category,
+          entityId: exists._id,
+          action: 'restore',
+          summary: `Re-added "${exists.label}" in ${category} (restored from archive)`,
+          actor: authResult.user,
+        })
+
+        return Response.json({ option: exists }, { status: 201 })
+      }
       return Response.json({ error: 'An option with this key already exists' }, { status: 409 })
     }
 
