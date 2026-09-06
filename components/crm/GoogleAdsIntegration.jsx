@@ -51,14 +51,17 @@ export function GoogleAdsIntegration() {
   const [campaigns, setCampaigns] = useState([])
   const [campaignsIntegrationId, setCampaignsIntegrationId] = useState('')
   const [unmappedCount, setUnmappedCount] = useState(0)
+  const [inboundKeyStatus, setInboundKeyStatus] = useState(null)
+  const [newInboundKey, setNewInboundKey] = useState('')
 
   const load = async () => {
-    const [statusRes, mappingsRes, brandsRes, membersRes, eventsRes] = await Promise.all([
+    const [statusRes, mappingsRes, brandsRes, membersRes, eventsRes, inboundKeyRes] = await Promise.all([
       apiFetch('/api/integrations/google'),
       apiFetch('/api/integrations/google/mappings'),
       apiFetch('/api/brands'),
       apiFetch('/api/team/members'),
       apiFetch('/api/integrations/google/events?status=unmapped&limit=50'),
+      apiFetch('/api/admin/workspace-api-key'),
     ])
     if (eventsRes.ok) setUnmappedCount((await eventsRes.json()).events?.length || 0)
     if (statusRes.ok) setStatus(await statusRes.json())
@@ -68,6 +71,7 @@ export function GoogleAdsIntegration() {
       const all = (await membersRes.json()).members || []
       setOwners(all.filter((m) => ['agent', 'manager', 'admin'].includes(m.role)))
     }
+    if (inboundKeyRes.ok) setInboundKeyStatus(await inboundKeyRes.json())
   }
 
   useEffect(() => {
@@ -128,6 +132,20 @@ export function GoogleAdsIntegration() {
     }
     setNewKey(data.googleLeadFormKey)
     toast.success('New webhook key generated — copy it now, it will not be shown again')
+    load()
+  }
+
+  const handleGenerateInboundKey = async () => {
+    setBusy('inboundKey')
+    const res = await apiFetch('/api/admin/workspace-api-key', { method: 'POST' })
+    const data = await res.json().catch(() => ({}))
+    setBusy('')
+    if (!res.ok) {
+      toast.error(data.error || 'Could not generate key')
+      return
+    }
+    setNewInboundKey(data.apiKey)
+    toast.success('New API key generated — copy it now, it will not be shown again')
     load()
   }
 
@@ -296,9 +314,33 @@ export function GoogleAdsIntegration() {
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Landing Page / Website form
             </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={inboundKeyStatus?.hasApiKey ? 'default' : 'outline'}>
+                {inboundKeyStatus?.hasApiKey ? 'Key configured' : 'Not configured'}
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGenerateInboundKey}
+                disabled={busy === 'inboundKey'}
+              >
+                {busy === 'inboundKey' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                {inboundKeyStatus?.hasApiKey ? 'Regenerate key' : 'Generate key'}
+              </Button>
+            </div>
+            {newInboundKey && (
+              <div className="flex items-center gap-2 rounded bg-muted p-2 font-mono text-xs">
+                <span className="truncate">{newInboundKey}</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copy(newInboundKey)}>
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Uses the same inbound API key as Meta/Zapier (Dashboard → Team & Weights → Generate Key).
-              POST to <code className="rounded bg-muted px-1">{origin}/api/public/leads</code> with{' '}
+              This same key also authenticates Meta/Zapier relay POSTs — it's one shared inbound key per
+              workspace, not Google-specific. Send it as an <code className="rounded bg-muted px-1">x-api-key</code>{' '}
+              header when your website form POSTs to{' '}
+              <code className="rounded bg-muted px-1">{origin}/api/public/leads</code>, along with{' '}
               <code className="rounded bg-muted px-1">gclid</code>,{' '}
               <code className="rounded bg-muted px-1">utm_source</code>,{' '}
               <code className="rounded bg-muted px-1">form_id</code> /{' '}
