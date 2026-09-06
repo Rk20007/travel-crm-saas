@@ -46,81 +46,13 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
   const stays = (form.nightStays || []).filter((s) => (category ? s.category === category : !s.category))
   const hotelsForTier = (form.hotels || []).filter((h) => (category ? h.category === category : !h.category))
 
-  // A property card should exist for every hotel picked in the Hotels step —
-  // add one automatically instead of making the user click "Add stay" and
-  // re-pick the same hotel from a dropdown for each one.
-  const hotelIdsKey = hotelsForTier.map((h) => h.id).join('|')
-  useEffect(() => {
-    const existingIds = new Set(stays.map((s) => s.hotelId).filter(Boolean))
-    const missing = hotelsForTier.filter((h) => h.id && !existingIds.has(h.id))
-    if (missing.length === 0) return
-    const additions = missing.map((h, idx) => {
-      const m = hotelMasters.find((hm) => hm._id === h.id)
-      const firstRoom = m?.rooms?.[0]
-      return {
-        location: h.location || m?.city || '',
-        hotelName: h.name || m?.name || '',
-        hotelId: h.id,
-        extraBedCharge: m?.extraBedCharge || 0,
-        cnbPrice: m?.cnbPrice || 0,
-        roomLines: [
-          {
-            ...createDefaultRoomLine(),
-            roomType: firstRoom?.roomType || m?.roomType || h.roomType || '',
-            pricePerNight: firstRoom?.price ?? m?.price ?? h.cost ?? 0,
-          },
-        ],
-        dayNumber: (form.nightStays?.length || 0) + idx + 1,
-        ...(category ? { category } : {}),
-      }
-    })
-    update({ nightStays: [...(form.nightStays || []), ...additions] })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelIdsKey, hotelMasters.length])
-
-  // Keep each stay's extra-bed/CNB rate snapshot in sync with its hotel's
-  // current master rate. Saving the itinerary computes totals from this
-  // snapshot alone (no hotel list available at that point), so a stay picked
-  // before its hotel had rates set up in Settings — or before a later rate
-  // change — would otherwise save with a stuck, stale (often 0) charge.
-  const staySyncKey = stays.map((s) => `${s.hotelId}:${s.extraBedCharge}:${s.cnbPrice}`).join('|')
-  useEffect(() => {
-    if (!hotelMasters.length) return
-    const additions = new Map()
-    for (const s of stays) {
-      // A rate the agent hand-edited for this stay (see the Extra bed / CNB
-      // charges block below) stays put — it doesn't get overwritten back to
-      // the master rate on the next sync pass.
-      if (s.extraChargeOverridden) continue
-      const m = hotelMasters.find((hm) => hm._id === s.hotelId)
-      if (!m) continue
-      const extraBedCharge = m.extraBedCharge || 0
-      const cnbPrice = m.cnbPrice || 0
-      if (s.extraBedCharge === extraBedCharge && s.cnbPrice === cnbPrice) continue
-      additions.set(s, { ...s, extraBedCharge, cnbPrice })
-    }
-    if (additions.size === 0) return
-    update({
-      nightStays: (form.nightStays || []).map((s) => additions.get(s) || s),
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staySyncKey, hotelMasters.length])
-
-  const addNightStay = () => {
-    update({
-      nightStays: [
-        ...(form.nightStays || []),
-        {
-          location: '',
-          hotelName: '',
-          hotelId: '',
-          roomLines: [createDefaultRoomLine()],
-          dayNumber: (form.nightStays?.length || 0) + 1,
-          ...(category ? { category } : {}),
-        },
-      ],
-    })
-  }
+  // Auto-add-missing-hotels and rate-sync both used to run here, once per
+  // NightStaysCard instance. With "Multiple budget options" on, the High and
+  // Low cards mount side by side and each read the *same* form.nightStays
+  // snapshot — whichever tier's effect fired last would overwrite the other's
+  // just-added stays with a patch computed from that stale (pre-update)
+  // array, silently wiping them out. Moved up to StepCosting as one
+  // consolidated effect per concern so there's only ever one writer.
 
   const updateNightStay = (stay, patch) => {
     update({
@@ -167,13 +99,14 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
           <span className="h-6 w-1.5 shrink-0 rounded-full bg-primary" />
           <div>
             <CardTitle>{label ? `${label} — Night stays` : 'Night stays'}</CardTitle>
-            <CardDescription>Pick a hotel and nights for each stop — cost is calculated automatically</CardDescription>
+            <CardDescription>
+              {/* No "Add stay" button — every hotel picked in the Hotels step
+                * already shows up here on its own; a separate manual add just
+                * duplicated that with no real use of its own. */}
+              A card appears automatically for every hotel picked in the Hotels step.
+            </CardDescription>
           </div>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={addNightStay} className="w-full gap-1 sm:w-auto">
-          <Plus className="h-4 w-4" />
-          Add stay
-        </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {hotelsForTier.length === 0 && (
@@ -433,6 +366,101 @@ function NightStaysCard({ category, label, form, update, hotelMasters, extraBeds
   )
 }
 
+/** One "Extra charges" card, scoped to a single budget tier when `category`
+ * is set (or to the whole trip when it's null). Percent charges are computed
+ * off `baseTotalForTier` — that tier's own hotel cost plus the shared
+ * vehicle/activity total — so a High Budget markup is never percent-of a
+ * number that includes the Low Budget hotel cost, or vice versa. */
+function ExtraChargesCard({ category, label, form, update, baseTotalForTier }) {
+  const [percentInput, setPercentInput] = useState('')
+  const [flatInput, setFlatInput] = useState('')
+  const charges = (form.extraCharges || []).filter((e) => (category ? e.category === category : !e.category))
+
+  const addPercentCharge = () => {
+    const percent = Number(percentInput)
+    if (!percent) return
+    const amount = (baseTotalForTier * percent) / 100
+    update({
+      extraCharges: [
+        ...(form.extraCharges || []),
+        { label: `${percent}% charge`, type: 'percent', percent, amount, ...(category ? { category } : {}) },
+      ],
+    })
+    setPercentInput('')
+  }
+
+  const addFlatCharge = () => {
+    const amount = Number(flatInput)
+    if (!amount) return
+    update({
+      extraCharges: [
+        ...(form.extraCharges || []),
+        { label: 'Extra charge', type: 'flat', amount, ...(category ? { category } : {}) },
+      ],
+    })
+    setFlatInput('')
+  }
+
+  const removeCharge = (charge) => {
+    update({ extraCharges: (form.extraCharges || []).filter((e) => e !== charge) })
+  }
+
+  return (
+    <div className="space-y-2">
+      {label && (
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+          <span className="h-3 w-1 rounded-full bg-primary" />
+          {label}
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            placeholder="e.g. 15"
+            value={percentInput}
+            onChange={(e) => setPercentInput(e.target.value)}
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+          <Button type="button" size="sm" variant="outline" onClick={addPercentCharge}>
+            Add %
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            placeholder="e.g. 2000"
+            value={flatInput}
+            onChange={(e) => setFlatInput(e.target.value)}
+          />
+          <Button type="button" size="sm" variant="outline" onClick={addFlatCharge}>
+            Add amount
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {charges.length === 0 ? (
+          <span className="text-xs text-muted-foreground">No extra charges added yet.</span>
+        ) : (
+          charges.map((e, i) => (
+            <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+              {e.type === 'percent' ? `${e.percent}%` : e.label}
+              {` — ${formatPrice(e.amount)}`}
+              <button
+                type="button"
+                onClick={() => removeCharge(e)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function StepCosting({ form, update }) {
   const [vehicles, setVehicles] = useState([])
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
@@ -441,8 +469,6 @@ export default function StepCosting({ form, update }) {
   const [activityOptions, setActivityOptions] = useState([])
   const [selectedActivityId, setSelectedActivityId] = useState('')
   const [activityQty, setActivityQty] = useState(1)
-  const [percentInput, setPercentInput] = useState('')
-  const [flatInput, setFlatInput] = useState('')
   const [hotelMasters, setHotelMasters] = useState([])
   const [mastersLoading, setMastersLoading] = useState(true)
   // Which already-added vehicle/activity chip's price is being hand-edited
@@ -469,6 +495,79 @@ export default function StepCosting({ form, update }) {
         .catch(() => {}),
     ]).finally(() => setMastersLoading(false))
   }, [])
+
+  // Auto-add a night-stay card for every hotel picked in the Hotels step —
+  // across *every* budget tier in one pass, so "Multiple budget options"
+  // never races two per-tier effects against each other (see the note on
+  // NightStaysCard above; that race is what made High Budget hotels vanish).
+  const tierCategories = form.budgetTiers ? BUDGET_TIERS.map((t) => t.key) : [null]
+  const hotelAutoAddKey = (form.hotels || []).map((h) => `${h.id}:${h.category || ''}`).join('|')
+  useEffect(() => {
+    const nightStays = form.nightStays || []
+    const additions = []
+    let nextDayNumber = nightStays.length + 1
+    for (const category of tierCategories) {
+      const hotelsForTier = (form.hotels || []).filter((h) => (category ? h.category === category : !h.category))
+      const existingIds = new Set(
+        nightStays
+          .filter((s) => (category ? s.category === category : !s.category))
+          .map((s) => s.hotelId)
+          .filter(Boolean)
+      )
+      for (const h of hotelsForTier) {
+        if (!h.id || existingIds.has(h.id)) continue
+        const m = hotelMasters.find((hm) => hm._id === h.id)
+        const firstRoom = m?.rooms?.[0]
+        additions.push({
+          location: h.location || m?.city || '',
+          hotelName: h.name || m?.name || '',
+          hotelId: h.id,
+          extraBedCharge: m?.extraBedCharge || 0,
+          cnbPrice: m?.cnbPrice || 0,
+          roomLines: [
+            {
+              ...createDefaultRoomLine(),
+              roomType: firstRoom?.roomType || m?.roomType || h.roomType || '',
+              pricePerNight: firstRoom?.price ?? m?.price ?? h.cost ?? 0,
+            },
+          ],
+          dayNumber: nextDayNumber++,
+          ...(category ? { category } : {}),
+        })
+      }
+    }
+    if (additions.length === 0) return
+    update({ nightStays: [...nightStays, ...additions] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelAutoAddKey, hotelMasters.length, form.budgetTiers])
+
+  // Keep every stay's extra-bed/CNB rate snapshot in sync with its hotel's
+  // current master rate — one pass over the whole nightStays array (not one
+  // per tier) for the same race-safety reason as above.
+  const staySyncKey = (form.nightStays || [])
+    .map((s) => `${s.hotelId}:${s.extraBedCharge}:${s.cnbPrice}`)
+    .join('|')
+  useEffect(() => {
+    if (!hotelMasters.length) return
+    const nightStays = form.nightStays || []
+    let changed = false
+    const next = nightStays.map((s) => {
+      // A rate the agent hand-edited for this stay (see the Extra bed / CNB
+      // charges block in NightStaysCard) stays put — it doesn't get
+      // overwritten back to the master rate on the next sync pass.
+      if (s.extraChargeOverridden) return s
+      const m = hotelMasters.find((hm) => hm._id === s.hotelId)
+      if (!m) return s
+      const extraBedCharge = m.extraBedCharge || 0
+      const cnbPrice = m.cnbPrice || 0
+      if (s.extraBedCharge === extraBedCharge && s.cnbPrice === cnbPrice) return s
+      changed = true
+      return { ...s, extraBedCharge, cnbPrice }
+    })
+    if (!changed) return
+    update({ nightStays: next })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staySyncKey, hotelMasters.length])
 
   const selectedVehicle = vehicles.find((v) => v._id === selectedVehicleId)
   const selectedRoute = selectedVehicle?.routes?.[selectedRouteIndex]
@@ -577,32 +676,6 @@ export default function StepCosting({ form, update }) {
       activities: (form.activities || []).map((a, i) => (i === editingActivityIndex ? { ...a, cost } : a)),
     })
     setEditingActivityIndex(null)
-  }
-
-  const addPercentCharge = () => {
-    const percent = Number(percentInput)
-    if (!percent) return
-    const amount = (baseTotal * percent) / 100
-    update({
-      extraCharges: [
-        ...(form.extraCharges || []),
-        { label: `${percent}% charge`, type: 'percent', percent, amount },
-      ],
-    })
-    setPercentInput('')
-  }
-
-  const addFlatCharge = () => {
-    const amount = Number(flatInput)
-    if (!amount) return
-    update({
-      extraCharges: [...(form.extraCharges || []), { label: 'Extra charge', type: 'flat', amount }],
-    })
-    setFlatInput('')
-  }
-
-  const removeExtraCharge = (index) => {
-    update({ extraCharges: (form.extraCharges || []).filter((_, i) => i !== index) })
   }
 
   return (
@@ -913,52 +986,28 @@ export default function StepCosting({ form, update }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  placeholder="e.g. 15"
-                  value={percentInput}
-                  onChange={(e) => setPercentInput(e.target.value)}
-                />
-                <span className="text-sm text-muted-foreground">%</span>
-                <Button type="button" size="sm" variant="outline" onClick={addPercentCharge}>
-                  Add %
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  placeholder="e.g. 2000"
-                  value={flatInput}
-                  onChange={(e) => setFlatInput(e.target.value)}
-                />
-                <Button type="button" size="sm" variant="outline" onClick={addFlatCharge}>
-                  Add amount
-                </Button>
-              </div>
+          {form.budgetTiers ? (
+            <div className="space-y-5">
+              {BUDGET_TIERS.map((tier) => {
+                const tierBase =
+                  (categoryTotals.find((c) => c.category === tier.key)?.hotelTotal || 0) +
+                  vehicleTotal +
+                  activityTotal
+                return (
+                  <ExtraChargesCard
+                    key={tier.key}
+                    category={tier.key}
+                    label={tier.label}
+                    form={form}
+                    update={update}
+                    baseTotalForTier={tierBase}
+                  />
+                )
+              })}
             </div>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {(form.extraCharges || []).length === 0 ? (
-                <span className="text-xs text-muted-foreground">No extra charges added yet.</span>
-              ) : (
-                (form.extraCharges || []).map((e, i) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                    {e.type === 'percent' ? `${e.percent}%` : e.label}
-                    {` — ${formatPrice(e.amount)}`}
-                    <button
-                      type="button"
-                      onClick={() => removeExtraCharge(i)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
+          ) : (
+            <ExtraChargesCard category={null} label={null} form={form} update={update} baseTotalForTier={baseTotal} />
+          )}
 
           {categoryTotals.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">

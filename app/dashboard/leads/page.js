@@ -21,6 +21,7 @@ import { LeadRemarksDialog } from '@/components/crm/LeadRemarksDialog'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
 import { useMasters, labelize } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
+import { displayEmail, isPlaceholderEmail } from '@/utils/crm'
 import { pickerToIso } from '@/lib/datetime'
 
 export default function LeadsPage() {
@@ -545,7 +546,7 @@ export default function LeadsPage() {
                     >
                       {lead.firstName} {lead.lastName}
                     </button>
-                    <p className="truncate text-sm text-muted-foreground">{lead.email}</p>
+                    <p className="truncate text-sm text-muted-foreground">{displayEmail(lead.email) || '—'}</p>
                     <p className="mt-1 text-sm">{lead.phone || '—'}</p>
                   </div>
                   <Badge variant="outline" className="shrink-0 capitalize">{lead.status}</Badge>
@@ -606,7 +607,7 @@ export default function LeadsPage() {
                       </a>
                     </Button>
                   )}
-                  {lead.email && (
+                  {lead.email && !isPlaceholderEmail(lead.email) && (
                     <Button size="sm" variant="outline" className="flex-1" asChild>
                       <a href={`mailto:${lead.email}`}>
                         <Mail className="h-4 w-4 text-amber-600" />
@@ -647,7 +648,7 @@ export default function LeadsPage() {
                         {lead.firstName} {lead.lastName}
                       </button>
                     </td>
-                    <td className="p-4">{lead.email}</td>
+                    <td className="p-4">{displayEmail(lead.email) || '—'}</td>
                     <td className="p-4">{lead.phone || '-'}</td>
                     <td className="p-4">
                       {(() => {
@@ -736,7 +737,7 @@ export default function LeadsPage() {
                             <WhatsAppIcon className="h-4 w-4 text-success" />
                           </a>
                         )}
-                        {lead.email && (
+                        {lead.email && !isPlaceholderEmail(lead.email) && (
                           <a
                             href={`mailto:${lead.email}`}
                             className="p-2 hover:bg-secondary rounded-lg"

@@ -31,6 +31,42 @@ export function DayPlanTemplateManager() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyTemplate)
   const [saving, setSaving] = useState(false)
+  // Hours/minutes are a UI split for entering form.duration, which is saved
+  // as free text (e.g. "2 hrs 30 min", or "30 min" when only minutes are
+  // given — never silently turned into a decimal like "0.5 hrs").
+  const [durationHours, setDurationHours] = useState('')
+  const [durationMinutes, setDurationMinutes] = useState('')
+
+  const setDuration = (hours, minutes) => {
+    setDurationHours(hours)
+    setDurationMinutes(minutes)
+    const h = Number(hours) || 0
+    const m = Number(minutes) || 0
+    const parts = []
+    if (h) parts.push(`${h} hr${h === 1 ? '' : 's'}`)
+    if (m) parts.push(`${m} min`)
+    setForm((f) => ({ ...f, duration: parts.join(' ') }))
+  }
+
+  /** Splits form.duration back into the two inputs for editing — either this
+   * component's own "X hrs Y min" text, or (from before that existed) a
+   * plain decimal-hours number like "2.5". Anything else free-typed just
+   * can't be split back into two numbers, and is left blank rather than
+   * guessed at. */
+  const parseDuration = (duration) => {
+    const str = String(duration || '').trim()
+    if (!str) return { hours: '', minutes: '' }
+    const hMatch = str.match(/(\d+)\s*hr/i)
+    const mMatch = str.match(/(\d+)\s*min/i)
+    if (hMatch || mMatch) {
+      return { hours: hMatch ? hMatch[1] : '', minutes: mMatch ? mMatch[1] : '' }
+    }
+    if (!/^\d+(\.\d+)?$/.test(str)) return { hours: '', minutes: '' }
+    const total = Number(str)
+    const h = Math.floor(total)
+    const m = Math.round((total - h) * 60)
+    return { hours: h ? String(h) : '', minutes: m ? String(m) : '' }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -58,6 +94,8 @@ export function DayPlanTemplateManager() {
   const openAdd = () => {
     setEditing(null)
     setForm(emptyTemplate)
+    setDurationHours('')
+    setDurationMinutes('')
     setDialogOpen(true)
   }
 
@@ -69,6 +107,9 @@ export function DayPlanTemplateManager() {
       duration: t.duration || '',
       description: t.description || '',
     })
+    const { hours, minutes } = parseDuration(t.duration)
+    setDurationHours(hours)
+    setDurationMinutes(minutes)
     setDialogOpen(true)
   }
 
@@ -152,7 +193,7 @@ export function DayPlanTemplateManager() {
       ) : (
         <div className="space-y-3">
           {filtered.map((t) => (
-            <div key={t._id} className="rounded-lg border bg-card p-4">
+            <div key={t._id} className="overflow-hidden rounded-lg border bg-card p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-primary">{t.title}</p>
@@ -176,13 +217,15 @@ export function DayPlanTemplateManager() {
                   )}
                   {t.duration && (
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Time: {t.duration} hrs
+                      <Clock className="h-3 w-3" /> Time: {t.duration}
                     </span>
                   )}
                 </div>
               )}
               {t.description && (
-                <p className="mt-2 text-sm text-muted-foreground">{t.description}</p>
+                <p className="mt-2 text-sm text-muted-foreground wrap-break-word whitespace-pre-wrap">
+                  {t.description}
+                </p>
               )}
             </div>
           ))}
@@ -220,13 +263,25 @@ export function DayPlanTemplateManager() {
                 />
               </div>
               <div>
-                <Label>Time (hours)</Label>
-                <Input
-                  value={form.duration}
-                  onChange={(e) => setForm({ ...form, duration: e.target.value.replace(/[^0-9.]/g, '') })}
-                  placeholder="e.g. 2"
-                  inputMode="decimal"
-                />
+                <Label>Time</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={durationHours}
+                    onChange={(e) => setDuration(e.target.value.replace(/[^0-9]/g, ''), durationMinutes)}
+                    placeholder="Hours"
+                    inputMode="numeric"
+                  />
+                  <Input
+                    value={durationMinutes}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, '')
+                      // Minutes only make sense up to 59 — 60+ belongs in Hours.
+                      setDuration(durationHours, v === '' ? '' : String(Math.min(59, Number(v))))
+                    }}
+                    placeholder="Minutes"
+                    inputMode="numeric"
+                  />
+                </div>
               </div>
             </div>
             <div>
@@ -235,7 +290,12 @@ export function DayPlanTemplateManager() {
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Day Description..."
-                className="min-h-[100px]"
+                // A single long unbroken run of characters (no spaces) doesn't
+                // wrap in a plain textarea and was pushing the whole dialog
+                // wider instead of scrolling — break-words forces it to wrap,
+                // and capping the height with overflow-y-auto turns any
+                // overflow into a normal scrollbar instead of growing forever.
+                className="max-h-60 min-h-25 overflow-y-auto wrap-break-word whitespace-pre-wrap field-sizing-fixed"
               />
             </div>
           </div>

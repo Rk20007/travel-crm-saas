@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
-import { leadDisplayName, LEAD_STATUSES, formatInr } from '@/utils/crm'
+import { leadDisplayName, LEAD_STATUSES, formatInr, isPlaceholderEmail } from '@/utils/crm'
 import { useMasters } from '@/hooks/useMasters'
 import { mutateJson } from '@/lib/mutate'
 import { pickerToIso } from '@/lib/datetime'
@@ -250,7 +250,7 @@ export default function LeadDetailPage({ params }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{leadDisplayName(lead)}</h1>
-          <p className="mt-1 text-muted-foreground">{lead.email}</p>
+          {!isPlaceholderEmail(lead.email) && <p className="mt-1 text-muted-foreground">{lead.email}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge variant="outline" className="capitalize">{lead.status}</Badge>
             <Badge variant="secondary" className="capitalize">{lead.source}</Badge>

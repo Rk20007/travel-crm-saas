@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { leadDisplayName, formatInr } from '@/utils/crm'
+import { leadDisplayName, formatInr, displayEmail } from '@/utils/crm'
 
 function formatDate(d) {
   if (!d) return '—'
@@ -183,7 +183,11 @@ export default function InvoiceClientLedgerPage() {
           bookingId: booking._id,
           leadId: lead?._id || booking.leadId,
           clientName: leadDisplayName(lead),
-          clientEmail: lead?.email || '',
+          // A Meta/Google lead that only ever gave a phone number carries a
+          // synthetic placeholder email (see lib/leadIngest.js) just to
+          // satisfy the Lead schema — never prefill an invoice with it, or
+          // Accounts would try to send/receive at an address that doesn't exist.
+          clientEmail: displayEmail(lead?.email),
           clientPhone: lead?.phone || '',
           subtotal,
           taxRate: Number(invoiceForm.gstRate) || 0,

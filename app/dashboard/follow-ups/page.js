@@ -22,7 +22,7 @@ import { Calendar, Phone, Mail, Eye, AlertCircle, Pencil, Loader2 } from 'lucide
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { leadDisplayName } from '@/utils/crm'
+import { leadDisplayName, isPlaceholderEmail } from '@/utils/crm'
 import { TableShell } from '@/components/crm/TableShell'
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon'
 import { CreateBookingDialog } from '@/components/crm/CreateBookingDialog'
@@ -435,7 +435,7 @@ function FollowUpsContent() {
                                 <WhatsAppIcon className="h-4 w-4 text-success" />
                               </a>
                             )}
-                            {lead?.email && (
+                            {lead?.email && !isPlaceholderEmail(lead.email) && (
                               <a href={`mailto:${lead.email}`} title="Email">
                                 <Mail className="h-4 w-4 text-amber-500" />
                               </a>

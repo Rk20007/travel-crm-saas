@@ -88,10 +88,14 @@ export function computeCategoryTotals(form, hotelMasters = []) {
 
   const extraBeds = Number(form.extraBeds) || 0
   const cnbCount = Number(form.cnbCount) || 0
+  // Vehicle/activity are booked once for the whole trip regardless of which
+  // hotel tier the client ends up picking, so those stay shared across both.
+  // Extra charges, though, are now scoped per tier (a 15% high-budget markup
+  // is meaningless applied to the low-budget total too) — only a charge
+  // tagged with this exact category counts toward it.
   const vehicleTotal = (form.vehicles || []).reduce((sum, v) => sum + (Number(v.cost) || 0), 0)
   const activityTotal = (form.activities || []).reduce((sum, a) => sum + (Number(a.cost) || 0), 0)
-  const extraChargesTotal = (form.extraCharges || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-  const sharedTotal = vehicleTotal + activityTotal + extraChargesTotal
+  const sharedTotal = vehicleTotal + activityTotal
 
   return categories
     .map((category) => {
@@ -106,7 +110,10 @@ export function computeCategoryTotals(form, hotelMasters = []) {
           const master = hotelMasters.find((h) => h._id === s.hotelId)
           return sum + roomsTotal + getStayExtraCost(s, master, extraBeds, cnbCount)
         }, 0)
-      return { category, hotelTotal, total: hotelTotal + sharedTotal }
+      const extraChargesTotal = (form.extraCharges || [])
+        .filter((e) => e.category === category)
+        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+      return { category, hotelTotal, total: hotelTotal + sharedTotal + extraChargesTotal }
     })
 }
 

@@ -26,7 +26,7 @@ import {
   ExternalLink,
   IndianRupee,
 } from 'lucide-react'
-import { leadDisplayName, formatInr } from '@/utils/crm'
+import { leadDisplayName, formatInr, displayEmail } from '@/utils/crm'
 
 const token = () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 const authH = () => ({ Authorization: `Bearer ${token()}` })
@@ -115,7 +115,7 @@ export function LeadPreviewDrawer({ leadId, open, onOpenChange }) {
 
             <Section icon={Users} title="Personal & Contact">
               <Row label="Name" value={leadDisplayName(lead)} />
-              <Row label="Email" value={lead.email} />
+              <Row label="Email" value={displayEmail(lead.email)} />
               <Row label="Phone" value={lead.phone} />
               <Row label="WhatsApp" value={lead.whatsapp} />
               <Row label="City" value={lead.city} />
